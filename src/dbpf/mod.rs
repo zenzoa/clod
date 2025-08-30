@@ -229,17 +229,13 @@ pub struct SevenBitString(Vec<u8>);
 
 impl fmt::Display for SevenBitString {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.to_string())
+		write!(f, "{}", String::from_utf8_lossy(&self.0))
 	}
 }
 
 impl SevenBitString {
 	pub fn new(string: &str) -> Self {
 		Self(string.as_bytes().to_vec())
-	}
-
-	pub fn to_string(&self) -> String {
-		String::from_utf8_lossy(&self.0).to_string()
 	}
 
 	pub fn read(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
@@ -252,7 +248,7 @@ impl SevenBitString {
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		let string_length = SevenBitInt(self.0.len());
 		string_length.write(writer)?;
-		writer.write(&self.0)?;
+		writer.write_all(&self.0)?;
 		Ok(())
 	}
 }
@@ -262,17 +258,13 @@ pub struct PascalString(Vec<u8>);
 
 impl fmt::Display for PascalString {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.to_string())
+		write!(f, "{}", String::from_utf8_lossy(&self.0))
 	}
 }
 
 impl PascalString {
 	pub fn new(string: &str) -> Self {
 		Self(string.as_bytes().to_vec())
-	}
-
-	pub fn to_string(&self) -> String {
-		String::from_utf8_lossy(&self.0).to_string()
 	}
 
 	pub fn read<T: BinRead + TryInto<usize>>(cur: &mut Cursor<&[u8]>) ->
@@ -289,60 +281,7 @@ impl PascalString {
 		where for<'a> <T as BinWrite>::Args<'a>: Default {
 			let string_length: T = self.0.len().try_into().ok().unwrap();
 			string_length.write_le(writer)?;
-			writer.write(&self.0)?;
+			writer.write_all(&self.0)?;
 			Ok(())
 	}
 }
-
-// === UNUSED ===
-
-// #[derive(Clone)]
-// pub struct Transformation {
-// 	pub x: f32,
-// 	pub y: f32,
-// 	pub z: f32
-// }
-
-// impl Transformation {
-// 	pub fn read(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
-// 		Ok(Self {
-// 			x: f32::read_le(cur)?,
-// 			y: f32::read_le(cur)?,
-// 			z: f32::read_le(cur)?,
-// 		})
-// 	}
-
-// 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-// 		self.x.write_le(writer)?;
-// 		self.y.write_le(writer)?;
-// 		self.z.write_le(writer)?;
-// 		Ok(())
-// 	}
-// }
-
-// #[derive(Clone)]
-// pub struct Quaternion {
-// 	pub x: f32,
-// 	pub y: f32,
-// 	pub z: f32,
-// 	pub w: f32,
-// }
-
-// impl Quaternion {
-// 	pub fn read(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
-// 		Ok(Self {
-// 			x: f32::read_le(cur)?,
-// 			y: f32::read_le(cur)?,
-// 			z: f32::read_le(cur)?,
-// 			w: f32::read_le(cur)?,
-// 		})
-// 	}
-
-// 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-// 		self.x.write_le(writer)?;
-// 		self.y.write_le(writer)?;
-// 		self.z.write_le(writer)?;
-// 		self.w.write_le(writer)?;
-// 		Ok(())
-// 	}
-// }

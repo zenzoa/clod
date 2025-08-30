@@ -151,14 +151,14 @@ impl Gzps {
 			_ => return Err("GZPS is missing \"fitness\" property.".into())
 		};
 
-		gzps.shape = match cpf.props.get(&format!("shapekeyidx")) {
+		gzps.shape = match cpf.props.get("shapekeyidx") {
 			Some(PropertyValue::Int(val)) => *val,
-			_ => return Err(format!("GZPS is missing \"shapekeyidx\" property.").into())
+			_ => return Err("GZPS is missing \"shapekeyidx\" property.".into())
 		};
 
-		gzps.resource = match cpf.props.get(&format!("resourcekeyidx")) {
+		gzps.resource = match cpf.props.get("resourcekeyidx") {
 			Some(PropertyValue::Int(val)) => *val,
-			_ => return Err(format!("GZPS is missing \"resourcekeyidx\" property.").into())
+			_ => return Err("GZPS is missing \"resourcekeyidx\" property.".into())
 		};
 
 		let num_overrides = match cpf.props.get("numoverrides") {
@@ -280,7 +280,7 @@ impl Category {
 	pub fn to_flag(categories: &[Category]) -> u32 {
 		let mut flag = 0;
 		for category in categories {
-			flag += category.clone() as u32;
+			flag += *category as u32;
 		}
 		flag
 	}
@@ -354,7 +354,7 @@ impl Gender {
 	pub fn are_compatible(genders1: &[Gender], genders2: &[Gender], ages: &[Age]) -> bool {
 		ages.contains(&Age::Baby) || ages.contains(&Age::Toddler) || ages.contains(&Age::Child)
 			|| (genders1.len() == 1 && genders2.contains(&genders1[0]))
-			|| (genders1.len() >= 2 && genders2.len() >= 1)
+			|| (genders1.len() >= 2 && !genders2.is_empty())
 	}
 }
 

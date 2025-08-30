@@ -23,7 +23,7 @@ impl fmt::Display for PropertyValue {
 			PropertyValue::Bool(value) => write!(f, "{}", value),
 			PropertyValue::Int(value) => write!(f, "{}", value),
 			PropertyValue::Float(value) => write!(f, "{}", value),
-			PropertyValue::String(value) => write!(f, "{}", value.to_string())
+			PropertyValue::String(value) => write!(f, "{}", value)
 		}
 	}
 }
@@ -71,32 +71,6 @@ impl Cpf {
 
 	pub fn read_xml(_cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
 		Err("XML not implemented yet.".into())
-		// cur.rewind()?;
-		// let buf = BufReader::new(cur);
-		// let parser = EventReader::new(buf);
-		// let mut depth = 0;
-		// for e in parser {
-		// 	match e {
-		// 		Ok(XmlEvent::StartElement { name, .. }) => {
-		// 			println!("{:spaces$}+{name}", "", spaces = depth * 2);
-		// 			depth += 1;
-		// 		}
-		// 		Ok(XmlEvent::EndElement { name }) => {
-		// 			depth -= 1;
-		// 			println!("{:spaces$}-{name}", "", spaces = depth * 2);
-		// 		}
-		// 		Err(e) => {
-		// 			println!("Error: {e}");
-		// 			break;
-		// 		}
-		// 		_ => {}
-		// 	}
-		// }
-
-		// Ok(Self {
-		// 	version: 0,
-		// 	props: Vec::new()
-		// })
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {

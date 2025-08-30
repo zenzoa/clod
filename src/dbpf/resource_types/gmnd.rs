@@ -20,9 +20,9 @@ pub struct Gmnd {
 impl Gmnd {
 	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let rcol = Rcol::read(&resource.data)?;
-		if rcol.blocks.len() >= 1 {
+		if !rcol.blocks.is_empty() {
 			if let RcolBlock::Gmnd(gmnd_block) = &rcol.blocks[0] {
-				let gmdc_ref = (*rcol.links.get(0).ok_or("GMDC reference not found.")?).clone();
+				let gmdc_ref = (*rcol.links.first().ok_or("GMDC reference not found.")?).clone();
 				return Ok(Self {
 					id: resource.id.clone(),
 					block: gmnd_block.clone(),
@@ -35,15 +35,6 @@ impl Gmnd {
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-		// let rcol = Rcol {
-		// 	links: vec![self.gmdc_ref.clone()],
-		// 	blocks: vec![RcolBlock::Gmnd(self.block.clone())]
-		// };
-		// let bytes: Vec<u8> = Vec::new();
-		// let mut cur = Cursor::new(bytes);
-		// rcol.write(&mut cur)?;
-		// Ok(cur.into_inner())
-
 		Ok(self.data.clone())
 	}
 }

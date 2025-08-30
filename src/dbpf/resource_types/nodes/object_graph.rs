@@ -22,7 +22,7 @@ impl ObjectGraphNode {
 	pub fn read(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
 		let block_name = SevenBitString::read(cur)?;
 		if &block_name.to_string() != "cObjectGraphNode" {
-			return Err(format!("Invalid cObjectGraphNode header.").into());
+			return Err("Invalid cObjectGraphNode header.".into());
 		}
 
 		let _block_id = u32::read_le(cur)?; // expect 0

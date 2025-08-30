@@ -33,7 +33,6 @@ pub enum DecodedResource {
 
 impl DecodedResource {
 	pub fn new(resource: &Resource, title: &str) -> Result<Self, Box<dyn Error>> {
-		// println!("READ {}", resource.id);
 		match resource.id.type_id {
 			TypeId::Gmdc => Ok(DecodedResource::Gmdc(Gmdc::new(resource)?)),
 			TypeId::Gmnd => Ok(DecodedResource::Gmnd(Gmnd::new(resource)?)),
@@ -140,7 +139,7 @@ impl Resource {
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-		writer.write(&self.data)?;
+		writer.write_all(&self.data)?;
 		Ok(())
 	}
 }
@@ -163,26 +162,26 @@ fn uncompress_data(data: &[u8], uncompressed_size: u32) -> Result<Vec<u8>, Box<d
 			if cur.position() == data.len() as u64 { break; }
 
 			let add_length = control1 & 0x03;
-			if let Err(_) = copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length) { break; }
+			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
 
 			let copy_length = ((control1 & 0x1C) >> 2) + 3;
 			let copy_offset = ((control1 & 0x60) << 3) + control2 + 1;
-			if let Err(_) = copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length) { break; }
+			if copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length).is_err() { break; }
 
-		} else if control1 >= 0x80 && control1 <= 0xBF {
+		} else if (0x80..=0xBF).contains(&control1) {
 			let control2 = u8::read(&mut cur)? as u32;
 			if cur.position() == data.len() as u64 { break; }
 			let control3 = u8::read(&mut cur)? as u32;
 			if cur.position() == data.len() as u64 { break; }
 
 			let add_length = (control2 >> 6) & 0x03;
-			if let Err(_) = copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length) { break; }
+			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
 
 			let copy_length = (control1 & 0x3F) + 4;
 			let copy_offset = ((control2 & 0x3F) << 8) + control3 + 1;
-			if let Err(_) = copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length) { break; }
+			if copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length).is_err() { break; }
 
-		} else if control1 >= 0xC0 && control1 <= 0xDF {
+		} else if (0xC0..=0xDF).contains(&control1) {
 			let control2 = u8::read(&mut cur)? as u32;
 			if cur.position() == data.len() as u64 { break; }
 			let control3 = u8::read(&mut cur)? as u32;
@@ -191,26 +190,26 @@ fn uncompress_data(data: &[u8], uncompressed_size: u32) -> Result<Vec<u8>, Box<d
 			if cur.position() == data.len() as u64 { break; }
 
 			let add_length = control1 & 0x03;
-			if let Err(_) = copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length) { break; }
+			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
 
 			let copy_length = ((control1 & 0x0C) << 6)  + control4 + 5;
 			let copy_offset = ((control1 & 0x10) << 12) + (control2 << 8) + control3 + 1;
-			if let Err(_) = copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length) { break; }
+			if copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length).is_err() { break; }
 
-		} else if control1 >= 0xE0 && control1 <= 0xFB {
+		} else if (0xE0..=0xFB).contains(&control1) {
 			let add_length = ((control1 & 0x1F) << 2) + 4;
-			if let Err(_) = copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length) { break; }
+			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
 
 		} else {
 			let add_length = control1 & 0x03;
-			if let Err(_) = copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length) { break; }
+			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
 		}
 	}
 
 	Ok(uncompressed_data)
 }
 
-fn copy_plain_text(cur: &mut Cursor<&[u8]>, data: &mut Vec<u8>, pos: &mut usize, length: u32) -> Result<(), Box<dyn Error>> {
+fn copy_plain_text(cur: &mut Cursor<&[u8]>, data: &mut [u8], pos: &mut usize, length: u32) -> Result<(), Box<dyn Error>> {
 	for _ in 0..length {
 		let byte = u8::read(cur)?;
 		data[*pos] = byte;
@@ -222,7 +221,7 @@ fn copy_plain_text(cur: &mut Cursor<&[u8]>, data: &mut Vec<u8>, pos: &mut usize,
 	Ok(())
 }
 
-fn copy_from_offset(data: &mut Vec<u8>, pos: &mut usize, offset: u32, length: u32) -> Result<(), Box<dyn Error>> {
+fn copy_from_offset(data: &mut [u8], pos: &mut usize, offset: u32, length: u32) -> Result<(), Box<dyn Error>> {
 	let start = *pos - offset as usize;
 	for i in 0..length as usize {
 		let byte = data[start+i];

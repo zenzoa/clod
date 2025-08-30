@@ -13,21 +13,17 @@ use crate::dbpf::resource_types::nodes::object_graph::ObjectGraphNode;
 #[derive(Clone)]
 pub struct Cres {
 	pub id: Identifier,
-	// pub block: CresBlock,
-	// pub shpe_ref: Identifier,
 	pub data: Vec<u8>
 }
 
 impl Cres {
 	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let rcol = Rcol::read(&resource.data)?;
-		if rcol.blocks.len() >= 1 {
+		if !rcol.blocks.is_empty() {
 			if let RcolBlock::Cres(_cres_block) = &rcol.blocks[0] {
-				let _shpe_ref = (*rcol.links.get(0).ok_or("SHPE reference not found.")?).clone();
+				let _shpe_ref = (*rcol.links.first().ok_or("SHPE reference not found.")?).clone();
 				return Ok(Self {
 					id: resource.id.clone(),
-					// block: cres_block.clone(),
-					// shpe_ref,
 					data: resource.data.clone()
 				});
 			}
@@ -36,15 +32,6 @@ impl Cres {
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-		// let rcol = Rcol {
-		// 	links: vec![self.shpe_ref.clone()],
-		// 	blocks: vec![RcolBlock::Cres(self.block.clone())]
-		// };
-		// let bytes: Vec<u8> = Vec::new();
-		// let mut cur = Cursor::new(bytes);
-		// rcol.write(&mut cur)?;
-
-		// Ok(cur.into_inner())
 		Ok(self.data.clone())
 	}
 }
@@ -68,7 +55,7 @@ impl CresBlock {
 
 		if typecode == 1 {
 			let file_name = SGResource::read(cur)?.file_name;
-			let _ = CompositionTreeNode::read(cur)?;
+			CompositionTreeNode::read(cur)?;
 			let ogn = ObjectGraphNode::read(cur)?;
 
 			let num_chains = u32::read_le(cur)?;

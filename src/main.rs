@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		Dialog::around(
 			ListView::new().with(|list| {
 				for (i, gzps) in data.gzps_list.iter().enumerate() {
-					list.add_child(&gzps.name.to_string(), SelectView::new()
+					list.add_child(gzps.name.to_string(), SelectView::new()
 						.with(|select| {
 							select.add_item("-", (i, None));
 							for (j, outfit) in data.outfits.iter().enumerate() {
@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 						.popup().scrollable())
 				}
 			}).scrollable())
-			.title(&original_filename.replace(".package", ""))
+			.title(original_filename.replace(".package", ""))
 			.button("Quit", |s| {
 				s.quit();
 			})
@@ -172,7 +172,7 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 	new_dbpf.write(&mut cur)?;
 
 	let mut new_file = File::create(&data.output_path)?;
-	new_file.write(&cur.into_inner())?;
+	new_file.write_all(&cur.into_inner())?;
 
 	Ok(())
 }

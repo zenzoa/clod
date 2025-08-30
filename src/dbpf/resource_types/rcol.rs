@@ -19,7 +19,6 @@ pub struct Rcol {
 
 impl Rcol {
 	pub fn read(data: &[u8]) -> Result<Self, Box<dyn Error>> {
-		println!("RCOL");
 		let mut cur = Cursor::new(data);
 		let first = u32::read_le(&mut cur)?;
 		let use_tgir = first == 0xFFFF0001;
@@ -91,47 +90,30 @@ impl RcolBlock {
 		match TypeId::new(block_id) {
 			TypeId::Gmdc => {
 				let gmdc_block = GmdcBlock::read(cur)?;
-				return Ok(RcolBlock::Gmdc(gmdc_block));
+				Ok(RcolBlock::Gmdc(gmdc_block))
 			},
 			TypeId::Gmnd => {
 				let gmnd_block = GmndBlock::read(cur)?;
-				return Ok(RcolBlock::Gmnd(gmnd_block));
+				Ok(RcolBlock::Gmnd(gmnd_block))
 			},
 			TypeId::Shpe => {
 				let shpe_block = ShpeBlock::read(cur)?;
-				return Ok(RcolBlock::Shpe(shpe_block));
+				Ok(RcolBlock::Shpe(shpe_block))
 			},
 			TypeId::Cres => {
 				let cres_block = CresBlock::read(cur)?;
-				return Ok(RcolBlock::Cres(cres_block));
+				Ok(RcolBlock::Cres(cres_block))
 			},
 			TypeId::Txmt => {
 				let txmt_block = TxmtBlock::read(cur)?;
-				return Ok(RcolBlock::Txmt(txmt_block));
+				Ok(RcolBlock::Txmt(txmt_block))
 			},
 			TypeId::Txtr => {
 				let txtr_block = TxtrBlock::read(cur)?;
-				return Ok(RcolBlock::Txtr(txtr_block));
+				Ok(RcolBlock::Txtr(txtr_block))
 			},
-			// TypeId::DataList => {
-			// 	let data_list_extension = DataListExtension::read(cur)?;
-			// 	return Ok(RcolBlock::DataList(data_list_extension));
-			// },
-			// TypeId::BoneData => {
-			// 	let bone_data_extension = BoneDataExtension::read(cur)?;
-			// 	return Ok(RcolBlock::BoneData(bone_data_extension));
-			// },
-			// TypeId::Transform => {
-			// 	let transform_node = TransformNode::read(cur)?;
-			// 	return Ok(RcolBlock::Transform(transform_node));
-			// },
-			// TypeId::ShapeRef => {
-			// 	let shape_ref_node = ShapeRefNode::read(cur)?;
-			// 	return Ok(RcolBlock::ShapeRef(shape_ref_node));
-			// },
 			_ => {
-				// println!("Unknown RCOL block: {:x}", block_id);
-				return Ok(RcolBlock::Unknown(()));
+				Ok(RcolBlock::Unknown(()))
 			}
 		}
 	}

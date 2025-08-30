@@ -10,7 +10,6 @@ use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
 #[derive(Clone)]
 pub struct Gmdc {
 	pub id: Identifier,
-	// pub block: GmdcBlock,
 	pub data: Vec<u8>
 }
 
@@ -30,15 +29,6 @@ impl Gmdc {
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-		// let rcol = Rcol {
-		// 	links: Vec::new(),
-		// 	blocks: vec![RcolBlock::Gmdc(self.block.clone())]
-		// };
-		// let bytes: Vec<u8> = Vec::new();
-		// let mut cur = Cursor::new(bytes);
-		// rcol.write(&mut cur)?;
-		// Ok(cur.into_inner())
-
 		Ok(self.data.clone())
 	}
 }

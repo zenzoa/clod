@@ -135,15 +135,14 @@ impl Outfit {
 	}
 
 	pub fn get_resources(&self) ->Vec<DecodedResource> {
-		let mut resources = Vec::new();
-
-		resources.push(DecodedResource::Gzps(self.gzps.clone()));
-		resources.push(DecodedResource::Idr(self.idr.clone()));
-
-		resources.push(DecodedResource::Gmdc(self.gmdc.clone()));
-		resources.push(DecodedResource::Gmnd(self.gmnd.clone()));
-		resources.push(DecodedResource::Shpe(self.shpe.clone()));
-		resources.push(DecodedResource::Cres(self.cres.clone()));
+		let mut resources = vec![
+			DecodedResource::Gzps(self.gzps.clone()),
+			DecodedResource::Idr(self.idr.clone()),
+			DecodedResource::Gmdc(self.gmdc.clone()),
+			DecodedResource::Gmnd(self.gmnd.clone()),
+			DecodedResource::Shpe(self.shpe.clone()),
+			DecodedResource::Cres(self.cres.clone()),
+		];
 
 		for txmt in &self.txmts {
 			resources.push(DecodedResource::Txmt(txmt.clone()));

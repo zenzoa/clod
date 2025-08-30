@@ -11,7 +11,7 @@ impl CompositionTreeNode {
 	pub fn read(cur: &mut Cursor<&[u8]>) -> Result<(), Box<dyn Error>> {
 		let block_name = SevenBitString::read(cur)?;
 		if &block_name.to_string() != "cCompositionTreeNode" {
-			return Err(format!("Invalid cCompositionTreeNode header.").into());
+			return Err("Invalid cCompositionTreeNode header.".into());
 		}
 
 		let _block_id = u32::read_le(cur)?;

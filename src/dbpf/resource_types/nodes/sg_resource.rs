@@ -13,7 +13,7 @@ impl SGResource {
 	pub fn read(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
 		let block_name = SevenBitString::read(cur)?;
 		if &block_name.to_string() != "cSGResource" {
-			return Err(format!("Invalid cSGResource header.").into());
+			return Err("Invalid cSGResource header.".into());
 		}
 
 		let _block_id = u32::read_le(cur)?; // expect 0

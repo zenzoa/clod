@@ -63,9 +63,7 @@ impl Idr {
 		entries.extend_from_slice(&self.txmt_refs);
 
 		(entries.len() as u32).write_le(&mut cur)?;
-		println!("\n3IDR");
 		for entry in entries {
-			println!("  entry: {}", entry);
 			entry.write(&mut cur, true)?;
 		}
 
