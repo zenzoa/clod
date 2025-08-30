@@ -1,0 +1,9 @@
+[package]
+name = "sims2defaulter"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+binrw = "0.14"
+xml-rs = "0.8"
+cursive = "0.21"
