@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::io::{ Cursor, Read, Write };
 use std::fmt;
+use std::convert::From;
+use std::fs::File;
 
 use binrw::{ BinRead, BinWrite };
 
@@ -83,6 +85,19 @@ impl Dbpf {
 		self.resources.sort_by_key(|res| res.get_id().to_string());
 		self.resources.dedup_by_key(|res| res.get_id().to_string());
 	}
+
+	pub fn write_package_file(resources: &[DecodedResource], path: &str) -> Result<(), Box<dyn Error>> {
+		let mut new_dbpf = Dbpf::new(resources.to_vec())?;
+		new_dbpf.clean_up_resources();
+
+		let mut cur = Cursor::new(Vec::new());
+		new_dbpf.write(&mut cur)?;
+
+		let mut new_file = File::create(path)?;
+		new_file.write_all(&cur.into_inner())?;
+
+		Ok(())
+	}
 }
 
 #[repr(u32)]
@@ -104,9 +119,9 @@ pub enum TypeId {
 	ShapeRef = 0x65245517,
 }
 
-impl TypeId {
-	pub fn new(id: u32) -> Self {
-		match id {
+impl From<u32> for TypeId {
+	fn from(value: u32) -> Self {
+		match value {
 			0xAC4F8687 => Self::Gmdc,
 			0x7BA3838C => Self::Gmnd,
 			0xFC6EB1F7 => Self::Shpe,
@@ -119,7 +134,7 @@ impl TypeId {
 			0xE9075BC5 => Self::BoneData,
 			0x65246462 => Self::Transform,
 			0x65245517 => Self::ShapeRef,
-			_ => Self::Unknown
+			 _ => Self::Unknown,
 		}
 	}
 }
@@ -154,7 +169,7 @@ pub struct Identifier {
 
 impl Identifier {
 	pub fn new(type_id: u32, group_id: u32, instance_id: u32, resource_id: u32) -> Self {
-		let type_id_real = TypeId::new(type_id);
+		let type_id_real = TypeId::from(type_id);
 		Self {
 			type_id: type_id_real,
 			group_id,

@@ -87,7 +87,7 @@ pub enum RcolBlock {
 
 impl RcolBlock {
 	pub fn read(cur: &mut Cursor<&[u8]>, block_id: u32) -> Result<RcolBlock, Box<dyn Error>> {
-		match TypeId::new(block_id) {
+		match TypeId::from(block_id) {
 			TypeId::Gmdc => {
 				let gmdc_block = GmdcBlock::read(cur)?;
 				Ok(RcolBlock::Gmdc(gmdc_block))

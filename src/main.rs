@@ -1,9 +1,10 @@
 use std::error::Error;
-use std::env::args;
 use std::fs;
-use std::fs::{ File, DirEntry };
-use std::io::{ Cursor, Write };
-use std::path::Path;
+use std::fs::DirEntry;
+use std::path::{ Path, PathBuf };
+use std::collections::HashMap;
+
+use clap::{ Parser, Subcommand };
 
 use cursive::With;
 use cursive::view::Scrollable;
@@ -11,11 +12,41 @@ use cursive::views::{ Dialog, ListView, SelectView };
 
 use crate::dbpf::Dbpf;
 use crate::dbpf::resource::DecodedResource;
-use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender };
+use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender, Part };
+use crate::dbpf::resource_types::idr::Idr;
 use crate::outfit::Outfit;
 
 mod dbpf;
 mod outfit;
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+	#[command(subcommand)]
+	command: Option<Command>
+}
+
+#[derive(Subcommand)]
+enum Command {
+	/// Generates a default replacement for a TS2 outfit
+	DefaultOutfit {
+		/// Package file containing original outfit(s)' GZPS and 3IDR resources
+		#[arg(short, long, value_name="FILE")]
+		original: PathBuf,
+		/// Folder containing replacement mesh and recolor package files
+		#[arg(short, long, value_name="FOLDER")]
+		replacements: Option<PathBuf>,
+	},
+	/// Extracts outfits from game files for use in default replacements
+	ExtractOutfits {
+		/// Folder containing one or more Skin.package files
+		#[arg(short, long, value_name="FOLDER")]
+		input: Option<PathBuf>,
+		/// Folder to save extracted outfit files to
+		#[arg(short, long, value_name="FOLDER")]
+		output: Option<PathBuf>,
+	}
+}
 
 #[derive(Clone, Default)]
 struct SivData {
@@ -26,10 +57,26 @@ struct SivData {
 }
 
 fn main() -> Result<(), Box<dyn Error + 'static>> {
-	let original_path = args().nth(1).expect("No file passed in as argument.");
-	let replacement_path = args().nth(2).expect("No replacement folder passed in as argument.");
+	let args = Args::parse();
+	match args.command {
+		Some(Command::DefaultOutfit{original, replacements}) => {
+			default_outfit(
+				&original,
+				&replacements.unwrap_or(PathBuf::from("./"))
+			)
+		}
+		Some(Command::ExtractOutfits{input, output}) => {
+			save_skins(
+				&input.unwrap_or(PathBuf::from("./")),
+				&output.unwrap_or(PathBuf::from("./output"))
+			)
+		}
+		None => Err("No command given.".into())
+	}
+}
 
-	let original_filename = Path::new(&original_path).file_name().unwrap().to_string_lossy();
+fn default_outfit(original_path: &Path, replacement_path: &Path) -> Result<(), Box<dyn Error>> {
+	let original_filename = original_path.file_name().unwrap().to_string_lossy();
 
 	// read all packages in replacement folder
 	let mut resources = Vec::new();
@@ -74,17 +121,10 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 	gzps_list.sort_by_key(|gzps| gzps.name.to_string());
 	let pairings: Vec<Option<usize>> = gzps_list.iter().map(|_| None).collect();
 
-	//
-	// let mut cur = Cursor::new(Vec::new());
-	// original_dbpf.write(&mut cur)?;
-	// let mut new_file = File::create(&original_path.replace(".package", "_DEFAULT.package"))?;
-	// new_file.write(&cur.into_inner())?;
-	//
-
 	let mut siv = cursive::default();
 
 	let data = SivData {
-		output_path: original_path.replace(".package", "_DEFAULT.package"),
+		output_path: original_path.to_str().ok_or("Unable to convert path to string")?.replace(".package", "_DEFAULT.package"),
 		gzps_list,
 		outfits,
 		pairings
@@ -130,6 +170,95 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 	Ok(())
 }
 
+fn save_skins(path: &Path, new_path: &Path) -> Result<(), Box<dyn Error>> {
+	let mut outfits: HashMap<String, (Gzps, Idr)> = HashMap::new();
+
+	let mut dir_entries: Vec<DirEntry> = fs::read_dir(path)?
+		.filter_map(|entry|
+			match entry {
+				Ok(entry) => Some(entry),
+				Err(_) => None
+			}).collect();
+
+	dir_entries.sort_by_key(|entry| entry.file_name().to_string_lossy().into_owned());
+
+	for dir_entry in dir_entries {
+		if let Ok(filename) = dir_entry.file_name().into_string() {
+			if filename.ends_with(".package") {
+				let bytes = fs::read(dir_entry.path())?;
+				let dbpf = Dbpf::read(&bytes, &filename.replace(".package", ""))?;
+				let gzps_list: Vec<Gzps> = dbpf.resources
+					.iter()
+					.filter_map(|r| if let DecodedResource::Gzps(gzps) = r { Some(gzps.clone()) } else { None })
+					.collect();
+				let idr_list: Vec<Idr> = dbpf.resources
+					.iter()
+					.filter_map(|r| if let DecodedResource::Idr(idr) = r { Some(idr.clone()) } else { None })
+					.collect();
+				for gzps in gzps_list {
+					if let Some(idr) = idr_list
+						.iter()
+						.find(|i| (i.id.group_id, i.id.instance_id, i.id.resource_id) == (gzps.id.group_id, gzps.id.instance_id, gzps.id.resource_id)) {
+							outfits.insert(gzps.name.to_string(), (gzps, idr.clone()));
+						}
+				}
+			}
+		}
+	}
+
+	let mut outfit_groups: HashMap<String, Vec<DecodedResource>> = HashMap::new();
+
+	for (name, (gzps, idr)) in &outfits {
+		if !(gzps.species == 1 &&
+			gzps.parts.len() == 1 &&
+			(gzps.parts[0] == Part::Body || gzps.parts[0] == Part::Top || gzps.parts[0] == Part::Bottom)) {
+				continue
+		}
+
+		let name_without_prefix = name.trim_start_matches("CASIE_");
+
+		let name_without_suffix = match name_without_prefix.split_once("_") {
+			Some((first, _)) => first,
+			None => name_without_prefix
+		};
+
+		let (age_gender, full_outfit_name) = name_without_suffix.split_at(2);
+
+		let (outfit_type, outfit_name) = if full_outfit_name.starts_with("body") {
+			("body", full_outfit_name.trim_start_matches("body"))
+		} else if full_outfit_name.starts_with("top") {
+			("top", full_outfit_name.trim_start_matches("top"))
+		} else if full_outfit_name.starts_with("bottom") {
+			("bottom", full_outfit_name.trim_start_matches("bottom"))
+		} else {
+			continue
+		};
+
+		let group_name = format!("{}_{}_{}", outfit_name, outfit_type, age_gender);
+
+		match outfit_groups.get_mut(&group_name) {
+			Some(resources) => {
+				resources.push(DecodedResource::Gzps(gzps.clone()));
+				resources.push(DecodedResource::Idr(idr.clone()));
+			},
+			None => {
+				outfit_groups.insert(group_name.to_string(), vec![
+					DecodedResource::Gzps(gzps.clone()),
+					DecodedResource::Idr(idr.clone()),
+				]);
+			}
+		}
+	}
+
+	for (name, resources) in &outfit_groups {
+		let mut file_path = new_path.to_path_buf();
+		file_path.push(format!("{name}.package"));
+		Dbpf::write_package_file(resources, &file_path.to_string_lossy())?;
+	}
+
+	Ok(())
+}
+
 fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 	let mut new_outfits = Vec::new();
 
@@ -163,16 +292,8 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 		}
 	}
 
-	// save replaced outfits as new file (original path with ".package" replaced with "_DEFAULT.package")
 	let resources = new_outfits.iter().flat_map(|o| o.get_resources()).collect::<Vec<DecodedResource>>();
-	let mut new_dbpf = Dbpf::new(resources)?;
-	new_dbpf.clean_up_resources();
-
-	let mut cur = Cursor::new(Vec::new());
-	new_dbpf.write(&mut cur)?;
-
-	let mut new_file = File::create(&data.output_path)?;
-	new_file.write_all(&cur.into_inner())?;
+	Dbpf::write_package_file(&resources, &data.output_path)?;
 
 	Ok(())
 }
