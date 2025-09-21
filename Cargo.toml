@@ -1,5 +1,5 @@
 [package]
-name = "sims2defaulter"
+name = "clod"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,3 +8,5 @@ binrw = "0.14"
 xmltree = "0.11"
 cursive = "0.21"
 clap = { version = "4.5.47", features = ["derive"] }
+refpack = "5.0.0"
+regex = "1.11"

@@ -1,7 +1,8 @@
 use std::error::Error;
 use std::io::{ Cursor, Read, Write };
 
-use binrw::BinRead;
+use refpack::easy_decompress;
+use refpack::format;
 
 use crate::dbpf::{ Identifier, TypeId };
 use crate::dbpf::index_entry::IndexEntry;
@@ -16,8 +17,6 @@ use crate::dbpf::resource_types::txtr::Txtr;
 
 use crate::dbpf::resource_types::gzps::Gzps;
 use crate::dbpf::resource_types::idr::Idr;
-
-pub const HEADER_SIZE: usize = 9;
 
 #[derive(Clone)]
 pub enum DecodedResource {
@@ -100,8 +99,10 @@ impl Resource {
 		let mut raw_data = vec![0u8; index_entry.resource_size as usize];
 		cur.read_exact(&mut raw_data)?;
 
-		let data = if let Some(uncompressed_size) = Self::get_compression(&raw_data, index_entry) {
-			Self::uncompress(&raw_data, index_entry.resource_size, uncompressed_size)?
+		let data = if Self::is_compressed(&raw_data, index_entry) {
+			easy_decompress::<format::Maxis>(&raw_data)
+				.or_else(|_| easy_decompress::<format::SimEA>(&raw_data))
+				.or_else(|_| easy_decompress::<format::Reference>(&raw_data))?
 		} else {
 			raw_data
 		};
@@ -112,26 +113,18 @@ impl Resource {
 		})
 	}
 
-	fn get_compression(data: &[u8], index_entry: &IndexEntry) -> Option<u32> {
+	fn is_compressed(data: &[u8], index_entry: &IndexEntry) -> bool {
 		let compression_id = data[5] as u32 * 256 + data[4] as u32;
 		if compression_id == 0xfb10 {
 			let compressed_size = ((data[3] as u32 * 256 + data[2] as u32) * 256 + data[1] as u32) * 256 + data[0] as u32;
 			if compressed_size == index_entry.resource_size {
 				let uncompressed_size = (data[6] as u32 * 256 + data[7]as u32) * 256 + data[8] as u32;
 				if uncompressed_size > compressed_size {
-					return Some(uncompressed_size)
+					return true;
 				}
 			}
 		}
-		None
-	}
-
-	pub fn uncompress(data: &[u8], compressed_size: u32, uncompressed_size: u32) -> Result<Vec<u8>, Box<dyn Error>> {
-		if compressed_size == uncompressed_size {
-			return Ok(data[HEADER_SIZE..].to_vec());
-		}
-		let uncompressed_data = uncompress_data(data, uncompressed_size)?;
-		Ok(uncompressed_data)
+		false
 	}
 
 	pub fn decode(&self, title: &str) -> Result<DecodedResource, Box<dyn Error>> {
@@ -142,94 +135,4 @@ impl Resource {
 		writer.write_all(&self.data)?;
 		Ok(())
 	}
-}
-
-fn uncompress_data(data: &[u8], uncompressed_size: u32) -> Result<Vec<u8>, Box<dyn Error>> {
-	let mut cur = Cursor::new(data);
-	cur.set_position(HEADER_SIZE as u64);
-
-	let mut uncompressed_data = vec![0u8; uncompressed_size as usize];
-	let mut pos = 0usize;
-
-	let mut control1 = 0u32;
-
-	while control1 != 0xFC && cur.position() < data.len() as u64 {
-		control1 = u8::read(&mut cur)? as u32;
-		if cur.position() == data.len() as u64 { break; }
-
-		if control1 <= 0x7F {
-			let control2 = u8::read(&mut cur)? as u32;
-			if cur.position() == data.len() as u64 { break; }
-
-			let add_length = control1 & 0x03;
-			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
-
-			let copy_length = ((control1 & 0x1C) >> 2) + 3;
-			let copy_offset = ((control1 & 0x60) << 3) + control2 + 1;
-			if copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length).is_err() { break; }
-
-		} else if (0x80..=0xBF).contains(&control1) {
-			let control2 = u8::read(&mut cur)? as u32;
-			if cur.position() == data.len() as u64 { break; }
-			let control3 = u8::read(&mut cur)? as u32;
-			if cur.position() == data.len() as u64 { break; }
-
-			let add_length = (control2 >> 6) & 0x03;
-			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
-
-			let copy_length = (control1 & 0x3F) + 4;
-			let copy_offset = ((control2 & 0x3F) << 8) + control3 + 1;
-			if copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length).is_err() { break; }
-
-		} else if (0xC0..=0xDF).contains(&control1) {
-			let control2 = u8::read(&mut cur)? as u32;
-			if cur.position() == data.len() as u64 { break; }
-			let control3 = u8::read(&mut cur)? as u32;
-			if cur.position() == data.len() as u64 { break; }
-			let control4 = u8::read(&mut cur)? as u32;
-			if cur.position() == data.len() as u64 { break; }
-
-			let add_length = control1 & 0x03;
-			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
-
-			let copy_length = ((control1 & 0x0C) << 6)  + control4 + 5;
-			let copy_offset = ((control1 & 0x10) << 12) + (control2 << 8) + control3 + 1;
-			if copy_from_offset(&mut uncompressed_data, &mut pos, copy_offset, copy_length).is_err() { break; }
-
-		} else if (0xE0..=0xFB).contains(&control1) {
-			let add_length = ((control1 & 0x1F) << 2) + 4;
-			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
-
-		} else {
-			let add_length = control1 & 0x03;
-			if copy_plain_text(&mut cur, &mut uncompressed_data, &mut pos, add_length).is_err() { break; }
-		}
-	}
-
-	Ok(uncompressed_data)
-}
-
-fn copy_plain_text(cur: &mut Cursor<&[u8]>, data: &mut [u8], pos: &mut usize, length: u32) -> Result<(), Box<dyn Error>> {
-	for _ in 0..length {
-		let byte = u8::read(cur)?;
-		data[*pos] = byte;
-		*pos += 1;
-		if *pos == data.len() {
-			return Err("End of data".into());
-		}
-	}
-	Ok(())
-}
-
-fn copy_from_offset(data: &mut [u8], pos: &mut usize, offset: u32, length: u32) -> Result<(), Box<dyn Error>> {
-	let start = *pos - offset as usize;
-	for i in 0..length as usize {
-		let byte = data[start+i];
-		data[*pos] = byte;
-		*pos += 1;
-		if *pos == data.len() {
-			return Err("End of data".into());
-		}
-	}
-	Ok(())
 }
