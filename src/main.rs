@@ -12,7 +12,7 @@ use cursive::views::{ Dialog, ListView, SelectView };
 
 use crate::dbpf::Dbpf;
 use crate::dbpf::resource::DecodedResource;
-use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender, Part };
+use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender, Category, Part };
 use crate::dbpf::resource_types::idr::Idr;
 use crate::outfit::Outfit;
 
@@ -90,6 +90,7 @@ fn default_outfit(original_path: &Path, replacement_path: &Path) -> Result<(), B
 	for dir_entry in dir_entries {
 		if let Ok(filename) = dir_entry.file_name().into_string() {
 			if filename.ends_with(".package") && filename != original_filename {
+				println!("read {}", filename);
 				let bytes = fs::read(dir_entry.path())?;
 				let dbpf = Dbpf::read(&bytes, &filename.replace(".package", ""))?;
 				resources.extend_from_slice(&dbpf.resources);
@@ -208,33 +209,17 @@ fn save_skins(path: &Path, new_path: &Path) -> Result<(), Box<dyn Error>> {
 
 	let mut outfit_groups: HashMap<String, Vec<DecodedResource>> = HashMap::new();
 
-	for (name, (gzps, idr)) in &outfits {
+	for (_, (gzps, idr)) in &outfits {
 		if !(gzps.species == 1 &&
+			!gzps.category.contains(&Category::Skin) &&
+			!gzps.category.contains(&Category::TryOn) &&
+			!gzps.category.contains(&Category::Overlay) &&
 			gzps.parts.len() == 1 &&
 			(gzps.parts[0] == Part::Body || gzps.parts[0] == Part::Top || gzps.parts[0] == Part::Bottom)) {
 				continue
 		}
 
-		let name_without_prefix = name.trim_start_matches("CASIE_");
-
-		let name_without_suffix = match name_without_prefix.split_once("_") {
-			Some((first, _)) => first,
-			None => name_without_prefix
-		};
-
-		let (age_gender, full_outfit_name) = name_without_suffix.split_at(2);
-
-		let (outfit_type, outfit_name) = if full_outfit_name.starts_with("body") {
-			("body", full_outfit_name.trim_start_matches("body"))
-		} else if full_outfit_name.starts_with("top") {
-			("top", full_outfit_name.trim_start_matches("top"))
-		} else if full_outfit_name.starts_with("bottom") {
-			("bottom", full_outfit_name.trim_start_matches("bottom"))
-		} else {
-			continue
-		};
-
-		let group_name = format!("{}_{}_{}", outfit_name, outfit_type, age_gender);
+		let group_name = gzps.generate_name();
 
 		match outfit_groups.get_mut(&group_name) {
 			Some(resources) => {
@@ -250,10 +235,16 @@ fn save_skins(path: &Path, new_path: &Path) -> Result<(), Box<dyn Error>> {
 		}
 	}
 
-	for (name, resources) in &outfit_groups {
-		let mut file_path = new_path.to_path_buf();
-		file_path.push(format!("{name}.package"));
-		Dbpf::write_package_file(resources, &file_path.to_string_lossy())?;
+	let mut outfit_group_names: Vec<&String> = outfit_groups.keys().collect();
+	outfit_group_names.sort();
+
+	for name in outfit_group_names {
+		if let Some(resources) = outfit_groups.get(name) {
+			let mut file_path = new_path.to_path_buf();
+			file_path.push(format!("{name}.package"));
+			// println!("{name}_{}", resources.len()/2);
+			Dbpf::write_package_file(resources, &file_path.to_string_lossy())?;
+		}
 	}
 
 	Ok(())

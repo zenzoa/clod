@@ -2,6 +2,8 @@ use std::error::Error;
 use std::io::Cursor;
 use std::collections::HashMap;
 
+use regex::Regex;
+
 use crate::dbpf::{ Identifier, PascalString };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
@@ -245,6 +247,27 @@ impl Gzps {
 
 		Ok(cur.into_inner())
 	}
+
+	pub fn generate_name(&self) -> String {
+		let age = Age::stringify(&self.age);
+		let gender = Gender::stringify(&self.gender);
+		let part = Part::stringify(&self.parts);
+
+		let full_name = self.name.to_string();
+		let mut name_without_prefix = full_name.clone();
+		let re = Regex::new(r"^(?:CASIE_)?(?:contest_)?[bpctyaeu][mfu](?:body)?(?:bottom)?(?:top)?([a-z,A-Z,0-9]+)_?").unwrap();
+		for (_, [inner_name]) in re.captures_iter(&full_name).map(|c| c.extract()) {
+			name_without_prefix = inner_name.to_string();
+		}
+
+		let mut name_without_ep = name_without_prefix.clone();
+		let re2 = Regex::new(r"([a-z,A-Z,0-9]+)ep\d$").unwrap();
+		for (_, [inner_name]) in re2.captures_iter(&name_without_prefix).map(|c| c.extract()) {
+			name_without_ep = inner_name.to_string();
+		}
+
+		format!("{age}{gender}_{part}_{name_without_ep}")
+	}
 }
 
 #[repr(u32)]
@@ -287,6 +310,19 @@ impl Category {
 		}
 		flag
 	}
+
+	// pub fn stringify(categories: &[Self]) -> String {
+	// 	let mut category_string = String::new();
+	// 	if categories.contains(&Self::Everyday) { category_string.push('e'); }
+	// 	if categories.contains(&Self::Swimwear) { category_string.push('b'); }
+	// 	if categories.contains(&Self::Sleepwear) { category_string.push('s'); }
+	// 	if categories.contains(&Self::Formal) { category_string.push('f'); }
+	// 	if categories.contains(&Self::Underwear) { category_string.push('u'); }
+	// 	if categories.contains(&Self::Maternity) { category_string.push('m'); }
+	// 	if categories.contains(&Self::Fitness) { category_string.push('a'); }
+	// 	if categories.contains(&Self::Outerwear) { category_string.push('o'); }
+	// 	category_string
+	// }
 }
 
 #[repr(u32)]
@@ -328,6 +364,17 @@ impl Age {
 			(a.contains(&Self::YoungAdult) && (b.contains(&Self::Adult) || b.contains(&Self::YoungAdult))) ||
 			(a.contains(&Self::Elder) && b.contains(&Self::Elder))
 	}
+
+	pub fn stringify(ages: &[Self]) -> String {
+		let mut age_string = String::new();
+		if ages.contains(&Self::Baby) { age_string.push('b'); }
+		if ages.contains(&Self::Toddler) { age_string.push('p'); }
+		if ages.contains(&Self::Child) { age_string.push('c'); }
+		if ages.contains(&Self::Teen) { age_string.push('t'); }
+		if ages.contains(&Self::Adult) || ages.contains(&Age::YoungAdult) { age_string.push('a'); }
+		if ages.contains(&Self::Elder) { age_string.push('e'); }
+		age_string
+	}
 }
 
 #[repr(u32)]
@@ -358,6 +405,14 @@ impl Gender {
 		ages.contains(&Age::Baby) || ages.contains(&Age::Toddler) || ages.contains(&Age::Child) ||
 			(genders1.len() == 1 && genders2.contains(&genders1[0])) ||
 			(genders1.len() >= 2 && !genders2.is_empty())
+	}
+
+	pub fn stringify(genders: &[Self]) -> String {
+		(if genders.len() > 1 { "u" }
+		else if genders.contains(&Self::Male) { "m" }
+		else if genders.contains(&Self::Female) { "f" }
+		else { "" })
+			.to_string()
 	}
 }
 
@@ -437,6 +492,17 @@ impl Part {
 			flag += *part as u32;
 		}
 		flag
+	}
+
+	pub fn stringify(parts: &[Self]) -> String {
+		(if parts.contains(&Self::Hair) { "hair" }
+		else if parts.contains(&Self::Face) { "face" }
+		else if parts.contains(&Self::Top) { "top" }
+		else if parts.contains(&Self::Body) { "body" }
+		else if parts.contains(&Self::Bottom) { "bottom" }
+		else if parts.contains(&Self::Accessory) { "accessory" }
+		else { "" })
+			.to_string()
 	}
 }
 
