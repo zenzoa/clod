@@ -99,32 +99,15 @@ impl Resource {
 		let mut raw_data = vec![0u8; index_entry.resource_size as usize];
 		cur.read_exact(&mut raw_data)?;
 
-		let data = if Self::is_compressed(&raw_data, index_entry) {
-			easy_decompress::<format::Maxis>(&raw_data)
-				.or_else(|_| easy_decompress::<format::SimEA>(&raw_data))
-				.or_else(|_| easy_decompress::<format::Reference>(&raw_data))?
-		} else {
-			raw_data
-		};
+		let data = easy_decompress::<format::Maxis>(&raw_data)
+			.or_else(|_| easy_decompress::<format::SimEA>(&raw_data))
+			.or_else(|_| easy_decompress::<format::Reference>(&raw_data))
+			.or_else(|_| -> Result<Vec<u8>, Box<dyn Error>> { Ok(raw_data.clone()) })?;
 
 		Ok(Self {
 			id: index_entry.id.clone(),
 			data
 		})
-	}
-
-	fn is_compressed(data: &[u8], index_entry: &IndexEntry) -> bool {
-		let compression_id = data[5] as u32 * 256 + data[4] as u32;
-		if compression_id == 0xfb10 {
-			let compressed_size = ((data[3] as u32 * 256 + data[2] as u32) * 256 + data[1] as u32) * 256 + data[0] as u32;
-			if compressed_size == index_entry.resource_size {
-				let uncompressed_size = (data[6] as u32 * 256 + data[7]as u32) * 256 + data[8] as u32;
-				if uncompressed_size > compressed_size {
-					return true;
-				}
-			}
-		}
-		false
 	}
 
 	pub fn decode(&self, title: &str) -> Result<DecodedResource, Box<dyn Error>> {
