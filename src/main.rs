@@ -271,6 +271,11 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 				new_gzps.age.push(Age::YoungAdult);
 			}
 
+			// if flag is odd, subtract one so it's visible in CAS
+			if new_gzps.flags & 1 == 1 {
+				new_gzps.flags -= 1;
+			}
+
 			// update idr's tgir to match gzps's tgir
 			new_outfit.idr.id.group_id = new_gzps.id.group_id;
 			new_outfit.idr.id.instance_id = new_gzps.id.instance_id;
