@@ -74,7 +74,7 @@ impl Cpf {
 		)?;
 
 		let version = match xml.attributes.get("version") {
-			Some(str) => Some(u16::from_str_radix(str, 10)?),
+			Some(str) => Some(str.parse::<u16>()?),
 			None => None
 		};
 

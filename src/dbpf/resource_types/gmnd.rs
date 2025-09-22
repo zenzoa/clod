@@ -12,7 +12,6 @@ use crate::dbpf::resource_types::nodes::object_graph::ObjectGraphNode;
 #[derive(Clone)]
 pub struct Gmnd {
 	pub id: Identifier,
-	pub block: GmndBlock,
 	pub gmdc_ref: Identifier,
 	pub data: Vec<u8>
 }
@@ -21,15 +20,12 @@ impl Gmnd {
 	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let rcol = Rcol::read(&resource.data)?;
 		if !rcol.blocks.is_empty() {
-			if let RcolBlock::Gmnd(gmnd_block) = &rcol.blocks[0] {
-				let gmdc_ref = (*rcol.links.first().ok_or("GMDC reference not found.")?).clone();
-				return Ok(Self {
-					id: resource.id.clone(),
-					block: gmnd_block.clone(),
-					gmdc_ref,
-					data: resource.data.clone()
-				});
-			}
+			let gmdc_ref = (*rcol.links.first().ok_or("GMDC reference not found.")?).clone();
+			return Ok(Self {
+				id: resource.id.clone(),
+				gmdc_ref,
+				data: resource.data.clone()
+			});
 		}
 		Err("Invalid GMND resource.".into())
 	}

@@ -108,7 +108,7 @@ fn default_outfit(original_path: &Path, replacement_path: &Path) -> Result<(), B
 	}
 
 	// get all GZPS resources in original package
-	let bytes = fs::read(&original_path)?;
+	let bytes = fs::read(original_path)?;
 	let original_dbpf = Dbpf::read(&bytes, "")?;
 	let mut gzps_list: Vec<Gzps> = original_dbpf.resources
 		.iter()
@@ -209,7 +209,7 @@ fn save_skins(path: &Path, new_path: &Path) -> Result<(), Box<dyn Error>> {
 
 	let mut outfit_groups: HashMap<String, Vec<DecodedResource>> = HashMap::new();
 
-	for (_, (gzps, idr)) in &outfits {
+	for (gzps, idr) in outfits.values() {
 		if !(gzps.species == 1 &&
 			!gzps.category.contains(&Category::Skin) &&
 			!gzps.category.contains(&Category::TryOn) &&
