@@ -70,15 +70,18 @@ impl Outfit {
 			return Err("3IDR does not define CRES".into())
 		};
 
-		let gmnd = resources.iter()
-			.find_map(|res| -> Option<Gmnd> {
+		let gmnd = if let Some(gmnd_ref) = &shpe.gmnd_ref {
+			resources.iter().find_map(|res| -> Option<Gmnd> {
 				if let DecodedResource::Gmnd(gmnd) = res {
-					if gmnd.block.file_name.to_string() == shpe.gmnd_name.to_string()[13..] {
+					if gmnd.id == *gmnd_ref {
 						return Some(gmnd.clone());
 					}
 				}
 				None
-			}).ok_or(format!("Missing GMND \"{}\"", shpe.gmnd_name))?.clone();
+			}).ok_or(format!("Missing {}", gmnd_ref))?.clone()
+		} else {
+			return Err("SHPE does not define GMND".into())
+		};
 
 		let gmdc = resources.iter()
 			.find_map(|res| -> Option<Gmdc> {

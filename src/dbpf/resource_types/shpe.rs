@@ -3,6 +3,9 @@ use std::io::Cursor;
 
 use binrw::{ BinRead, BinWrite };
 
+use regex::Regex;
+
+use crate::crc::{ hash_crc24, hash_crc32 };
 use crate::dbpf::{ Identifier, TypeId, SevenBitString, PascalString };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
@@ -14,7 +17,7 @@ use crate::dbpf::resource_types::nodes::object_graph::ObjectGraphNode;
 pub struct Shpe {
 	pub id: Identifier,
 	pub block: ShpeBlock,
-	pub gmnd_name: SevenBitString
+	pub gmnd_ref: Option<Identifier>
 }
 
 impl Shpe {
@@ -22,18 +25,28 @@ impl Shpe {
 		let rcol = Rcol::read(&resource.data)?;
 		if rcol.blocks.len() == 1 {
 			if let RcolBlock::Shpe(shpe_block) = &rcol.blocks[0] {
-				let full_detail_lod = shpe_block.lods.iter().find(|lod| {
-					lod.lod_type == 0 && !lod.gmnd_name.0.is_empty()
+				let gmnd_item = shpe_block.gmnd_items.iter().find(|gmnd_item| {
+					gmnd_item.item_type == 0 && !gmnd_item.name.0.is_empty()
 				});
-				let gmnd_name = if let Some(lod) = full_detail_lod {
-					lod.gmnd_name.clone()
+				let gmnd_ref = if let Some(gmnd_item) = gmnd_item {
+					let re = Regex::new(r"^##0x([0-9,a-f,A-F]+)!(.+)$").unwrap();
+					let gmnd_name = gmnd_item.name.to_string();
+					if let Some(captures) = re.captures(&gmnd_name) {
+						let type_id = TypeId::Gmnd as u32;
+						let group_id = u32::from_str_radix(&captures[1], 16).unwrap();
+						let instance_id = hash_crc24(&captures[2]);
+						let resource_id = hash_crc32(&captures[2]);
+						Some(Identifier::new(type_id, group_id, instance_id, resource_id))
+					} else {
+						None
+					}
 				} else {
-					return Err("SHPE does not define GMND".into());
+					None
 				};
 				return Ok(Self {
 					id: resource.id.clone(),
 					block: shpe_block.clone(),
-					gmnd_name
+					gmnd_ref
 				});
 			}
 		}
@@ -58,7 +71,7 @@ pub struct ShpeBlock {
 	file_name: SevenBitString,
 	ogn: ObjectGraphNode,
 	lod_values: Vec<u32>,
-	lods: Vec<Lod>,
+	gmnd_items: Vec<GmndItem>,
 	materials: Vec<Material>
 }
 
@@ -82,10 +95,10 @@ impl ShpeBlock {
 			}
 		}
 
-		let mut lods = Vec::new();
-		let num_lods = u32::read_le(cur)?;
-		for _ in 0..num_lods {
-			lods.push(Lod::read(cur, version)?);
+		let mut gmnd_items = Vec::new();
+		let num_gmnd_items = u32::read_le(cur)?;
+		for _ in 0..num_gmnd_items {
+			gmnd_items.push(GmndItem::read(cur, version)?);
 		}
 
 		let mut materials = Vec::new();
@@ -99,7 +112,7 @@ impl ShpeBlock {
 			file_name,
 			ogn,
 			lod_values,
-			lods,
+			gmnd_items,
 			materials
 		})
 	}
@@ -122,9 +135,9 @@ impl ShpeBlock {
 			}
 		}
 
-		(self.lods.len() as u32).write_le(writer)?;
-		for lod in &self.lods {
-			lod.write(writer, self.version)?;
+		(self.gmnd_items.len() as u32).write_le(writer)?;
+		for gmnd_item in &self.gmnd_items {
+			gmnd_item.write(writer, self.version)?;
 		}
 
 		(self.materials.len() as u32).write_le(writer)?;
@@ -137,39 +150,39 @@ impl ShpeBlock {
 }
 
 #[derive(Clone)]
-struct Lod {
-	lod_type: u32,
+struct GmndItem {
+	item_type: u32,
 	enabled: u8,
 	use_submesh: u8,
 	header_link_index: u32,
-	gmnd_name: SevenBitString
+	name: SevenBitString
 }
 
-impl Lod {
+impl GmndItem {
 	pub fn read(cur: &mut Cursor<&[u8]>, version: u32) -> Result<Self, Box<dyn Error>> {
-		let lod_type = u32::read_le(cur)?;
+		let item_type = u32::read_le(cur)?;
 		let enabled = u8::read(cur)?;
 		let use_submesh = if version != 8 { u8::read(cur)? } else { 0 };
 		let header_link_index = if version != 8 { u32::read_le(cur)? } else { 0 };
-		let gmnd_name = if version == 8 { SevenBitString::read(cur)? } else { SevenBitString::new("") };
+		let name = if version == 8 { SevenBitString::read(cur)? } else { SevenBitString::new("") };
 
 		Ok(Self {
-			lod_type,
+			item_type,
 			enabled,
 			use_submesh,
 			header_link_index,
-			gmnd_name
+			name
 		})
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, version: u32) -> Result<(), Box<dyn Error>> {
-		self.lod_type.write_le(writer)?;
+		self.item_type.write_le(writer)?;
 		self.enabled.write_le(writer)?;
 		if version != 8 {
 			self.use_submesh.write_le(writer)?;
 			self.header_link_index.write_le(writer)?;
 		} else {
-			self.gmnd_name.write(writer)?;
+			self.name.write(writer)?;
 		}
 		Ok(())
 	}

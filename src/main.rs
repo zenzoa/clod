@@ -16,6 +16,7 @@ use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender, Category, Part };
 use crate::dbpf::resource_types::idr::Idr;
 use crate::outfit::Outfit;
 
+mod crc;
 mod dbpf;
 mod outfit;
 
@@ -90,7 +91,6 @@ fn default_outfit(original_path: &Path, replacement_path: &Path) -> Result<(), B
 	for dir_entry in dir_entries {
 		if let Ok(filename) = dir_entry.file_name().into_string() {
 			if filename.ends_with(".package") && filename != original_filename {
-				println!("read {}", filename);
 				let bytes = fs::read(dir_entry.path())?;
 				let dbpf = Dbpf::read(&bytes, &filename.replace(".package", ""))?;
 				resources.extend_from_slice(&dbpf.resources);
