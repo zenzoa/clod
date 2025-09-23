@@ -19,6 +19,7 @@ pub enum CpfType {
 	XmlString
 }
 
+#[derive(Clone)]
 pub struct Cpf {
 	pub cpf_type: CpfType,
 	pub version: Option<u16>,

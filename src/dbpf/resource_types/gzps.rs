@@ -268,6 +268,11 @@ impl Gzps {
 
 		format!("{age}{gender}_{part}_{name_without_ep}")
 	}
+
+	pub fn max_resource_key(&self) -> u32 {
+		let resource_keys = self.overrides.iter().map(|o| o.resource);
+		resource_keys.max().unwrap_or(0)
+	}
 }
 
 #[repr(u32)]

@@ -12,6 +12,10 @@ pub struct Idr {
 	pub cres_ref: Option<Identifier>,
 	pub shpe_ref: Option<Identifier>,
 	pub txmt_refs: Vec<Identifier>,
+	pub ui_ref: Option<Identifier>,
+	pub str_ref: Option<Identifier>,
+	pub coll_ref: Option<Identifier>,
+	pub gzps_ref: Option<Identifier>
 }
 
 impl Idr {
@@ -19,6 +23,10 @@ impl Idr {
 		let mut cres_ref = None;
 		let mut shpe_ref = None;
 		let mut txmt_refs = Vec::new();
+		let mut ui_ref = None;
+		let mut str_ref = None;
+		let mut coll_ref = None;
+		let mut gzps_ref = None;
 
 		let mut cur = Cursor::new(&resource.data[..]);
 
@@ -33,6 +41,10 @@ impl Idr {
 				TypeId::Cres => { cres_ref = Some(entry_id); }
 				TypeId::Shpe => { shpe_ref = Some(entry_id); }
 				TypeId::Txmt => { txmt_refs.push(entry_id); }
+				TypeId::Ui => { ui_ref = Some(entry_id); }
+				TypeId::TextList => { str_ref = Some(entry_id); }
+				TypeId::Coll => { coll_ref = Some(entry_id); }
+				TypeId::Gzps => { gzps_ref = Some(entry_id); }
 				_ => {}
 			}
 		}
@@ -41,7 +53,11 @@ impl Idr {
 			id: resource.id.clone(),
 			cres_ref,
 			shpe_ref,
-			txmt_refs
+			txmt_refs,
+			ui_ref,
+			str_ref,
+			coll_ref,
+			gzps_ref
 		})
 	}
 
@@ -54,13 +70,32 @@ impl Idr {
 		2u32.write_le(&mut cur)?;
 
 		let mut entries = Vec::new();
+
 		if let Some(cres_ref) = &self.cres_ref {
 			entries.push(cres_ref.clone());
 		}
+
 		if let Some(shpe_ref) = &self.shpe_ref {
 			entries.push(shpe_ref.clone());
 		}
+
 		entries.extend_from_slice(&self.txmt_refs);
+
+		if let Some(ui_ref) = &self.ui_ref {
+			entries.push(ui_ref.clone());
+		}
+
+		if let Some(str_ref) = &self.str_ref {
+			entries.push(str_ref.clone());
+		}
+
+		if let Some(coll_ref) = &self.coll_ref {
+			entries.push(coll_ref.clone());
+		}
+
+		if let Some(gzps_ref) = &self.gzps_ref {
+			entries.push(gzps_ref.clone());
+		}
 
 		(entries.len() as u32).write_le(&mut cur)?;
 		for entry in entries {

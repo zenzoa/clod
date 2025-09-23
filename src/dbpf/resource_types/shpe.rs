@@ -17,7 +17,7 @@ use crate::dbpf::resource_types::nodes::object_graph::ObjectGraphNode;
 pub struct Shpe {
 	pub id: Identifier,
 	pub block: ShpeBlock,
-	pub gmnd_ref: Option<Identifier>
+	pub gmnd_ref: Identifier
 }
 
 impl Shpe {
@@ -36,12 +36,12 @@ impl Shpe {
 						let group_id = u32::from_str_radix(&captures[1], 16).unwrap();
 						let instance_id = hash_crc24(&captures[2]);
 						let resource_id = hash_crc32(&captures[2]);
-						Some(Identifier::new(type_id, group_id, instance_id, resource_id))
+						Identifier::new(type_id, group_id, instance_id, resource_id)
 					} else {
-						None
+						return Err(format!("{} does not define GMND", resource.id).into());
 					}
 				} else {
-					None
+					return Err(format!("{} does not define GMND", resource.id).into());
 				};
 				return Ok(Self {
 					id: resource.id.clone(),
