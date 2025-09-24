@@ -42,8 +42,7 @@ impl TextList {
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-		let bytes: Vec<u8> = Vec::new();
-		let mut cur = Cursor::new(bytes);
+		let mut cur = Cursor::new(Vec::new());
 
 		self.key_name.write(&mut cur)?;
 
@@ -91,8 +90,7 @@ impl StringItem {
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-		let bytes: Vec<u8> = Vec::new();
-		let mut cur = Cursor::new(bytes);
+		let mut cur = Cursor::new(Vec::new());
 
 		self.language_code.write(&mut cur)?;
 

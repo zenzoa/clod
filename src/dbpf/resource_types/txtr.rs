@@ -35,8 +35,7 @@ impl Txtr {
 			links: Vec::new(),
 			blocks: vec![RcolBlock::Txtr(self.block.clone())]
 		};
-		let bytes: Vec<u8> = Vec::new();
-		let mut cur = Cursor::new(bytes);
+		let mut cur = Cursor::new(Vec::new());
 		rcol.write(&mut cur)?;
 		Ok(cur.into_inner())
 	}

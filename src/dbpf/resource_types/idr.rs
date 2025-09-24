@@ -62,8 +62,7 @@ impl Idr {
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-		let bytes: Vec<u8> = Vec::new();
-		let mut cur = Cursor::new(bytes);
+		let mut cur = Cursor::new(Vec::new());
 
 		0xDEADBEEFu32.write_le(&mut cur)?;
 
