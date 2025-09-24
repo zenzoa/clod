@@ -14,14 +14,23 @@ use crate::dbpf::resource_types::text_list::TextList;
 use crate::outfit::Outfit;
 
 #[derive(Clone, Default)]
+pub struct DefaultSettings {
+	pub compress: bool,
+	pub ignore_missing: bool,
+	pub gender_fix: bool,
+	pub product_fix: bool
+}
+
+#[derive(Clone, Default)]
 struct SivData {
 	output_path: String,
 	gzps_list: Vec<Gzps>,
 	outfits: Vec<Outfit>,
-	pairings: Vec<Option<usize>>
+	pairings: Vec<Option<usize>>,
+	settings: DefaultSettings
 }
 
-pub fn default_outfit(original_path: &Path, replacement_path: &Path, ignore_missing: bool) -> Result<(), Box<dyn Error>> {
+pub fn default_outfit(original_path: &Path, replacement_path: &Path, settings: DefaultSettings) -> Result<(), Box<dyn Error>> {
 	let original_filename = original_path.file_name().unwrap().to_string_lossy();
 
 	// read all packages in replacement folder
@@ -47,7 +56,7 @@ pub fn default_outfit(original_path: &Path, replacement_path: &Path, ignore_miss
 	let mut outfits = Vec::new();
 	for resource in &resources {
 		if let DecodedResource::Gzps(gzps) = resource {
-			let outfit = Outfit::from_resources(gzps.clone(), &resources, ignore_missing)?;
+			let outfit = Outfit::from_resources(gzps.clone(), &resources, settings.ignore_missing)?;
 			outfits.push(outfit);
 		}
 	}
@@ -73,7 +82,8 @@ pub fn default_outfit(original_path: &Path, replacement_path: &Path, ignore_miss
 		output_path: original_path.to_str().ok_or("Unable to convert path to string")?.replace(".package", "_DEFAULT.package"),
 		gzps_list,
 		outfits,
-		pairings
+		pairings,
+		settings
 	};
 	siv.set_user_data(data.clone());
 
@@ -130,13 +140,21 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 			new_gzps.shoe = new_outfit.gzps.shoe;
 			new_gzps.overrides = new_outfit.gzps.overrides.clone();
 
-			// enable for both genders if baby/toddler/child, and enabled for young adult + adult
-			if new_gzps.age.contains(&Age::Baby) || new_gzps.age.contains(&Age::Toddler) || new_gzps.age.contains(&Age::Child) {
+			// enable for both genders if baby/toddler/child
+			if data.settings.gender_fix && (new_gzps.age.contains(&Age::Baby) || new_gzps.age.contains(&Age::Toddler) || new_gzps.age.contains(&Age::Child)) {
 				new_gzps.gender = vec![Gender::Male, Gender::Female];
-			} else if new_gzps.age.contains(&Age::YoungAdult) && !new_gzps.age.contains(&Age::Adult) {
+			}
+
+			// enable for young adult + adult
+			if new_gzps.age.contains(&Age::YoungAdult) && !new_gzps.age.contains(&Age::Adult) {
 				new_gzps.age.push(Age::Adult);
 			} else if new_gzps.age.contains(&Age::Adult) && !new_gzps.age.contains(&Age::YoungAdult) {
 				new_gzps.age.push(Age::YoungAdult);
+			}
+
+			// set product to Base Game to remove pack icon
+			if data.settings.product_fix {
+				new_gzps.product = Some(1);
 			}
 
 			// update 3IDR's TGIR to match GZPS's TGIR
@@ -154,7 +172,7 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 				}
 
 				// create BINX resource
-				let sort_index = 0;
+				let sort_index = new_gzps.id.group_id;
 				new_outfit.binx = Some(new_outfit.generate_binx(sort_index, 1));
 
 				// add additional references to 3IDR
@@ -196,7 +214,7 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 	resources.extend_from_slice(&text_list_resources);
 
 	// save package file
-	Dbpf::write_package_file(&resources, &data.output_path)?;
+	Dbpf::write_package_file(&resources, &data.output_path, data.settings.compress)?;
 
 	Ok(())
 }

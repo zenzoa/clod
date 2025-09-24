@@ -27,7 +27,7 @@ impl IndexEntry {
 		let mut index_entries = Vec::new();
 		for _ in 0..header.index_entry_count as usize {
 			let index_entry = Self::read(cur, header.index_minor_version)?;
-			if index_entry.id.type_id != TypeId::Unknown {
+			if index_entry.id.type_id != TypeId::Unknown && index_entry.id.type_id != TypeId::Dir {
 				index_entries.push(index_entry);
 			}
 		}

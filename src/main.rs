@@ -9,6 +9,8 @@ mod outfit;
 mod defaulter;
 mod extractor;
 
+use defaulter::DefaultSettings;
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -25,9 +27,18 @@ enum Command {
 		/// Folder containing replacement mesh and recolor packages
 		#[arg(short, long, value_name="FOLDER")]
 		replacements: Option<PathBuf>,
+		/// Compress resources
+		#[arg(short, long)]
+		compress: bool,
 		/// Ignore missing mesh/texture resources
 		#[arg(short, long)]
 		ignore_missing: bool,
+		/// Enable baby, toddler, and child outfits for all genders
+		#[arg(short, long)]
+		gender_fix: bool,
+		/// Set product ids to Base Game to remove pack icon
+		#[arg(short, long)]
+		product_fix: bool,
 	},
 	/// Extracts outfits from game files for use in default replacements
 	ExtractOutfits {
@@ -42,15 +53,15 @@ enum Command {
 fn main() -> Result<(), Box<dyn Error + 'static>> {
 	let args = Args::parse();
 	match args.command {
-		Some(Command::DefaultOutfit{original, replacements, ignore_missing}) => {
+		Some(Command::DefaultOutfit{ original, replacements, compress, ignore_missing, gender_fix, product_fix }) => {
 			let default_folder = original.parent().unwrap_or(Path::new("./")).to_path_buf();
 			defaulter::default_outfit(
 				&original,
 				&replacements.unwrap_or(default_folder),
-				ignore_missing
+				DefaultSettings{ compress, ignore_missing, gender_fix, product_fix }
 			)
 		}
-		Some(Command::ExtractOutfits{input, output}) => {
+		Some(Command::ExtractOutfits{ input, output }) => {
 			let input_folder = input.unwrap_or(PathBuf::from("./"));
 			let default_output = input_folder.parent().unwrap_or(Path::new("./")).to_path_buf();
 			extractor::save_skins(

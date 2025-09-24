@@ -1,8 +1,7 @@
 use std::error::Error;
 use std::io::{ Cursor, Read, Write };
 
-use refpack::easy_decompress;
-use refpack::format;
+use refpack::{ CompressionOptions, easy_compress, easy_decompress, format };
 
 use crate::dbpf::{ Identifier, TypeId };
 use crate::dbpf::index_entry::IndexEntry;
@@ -111,8 +110,8 @@ impl Resource {
 
 		let data = easy_decompress::<format::Maxis>(&raw_data)
 			.or_else(|_| easy_decompress::<format::SimEA>(&raw_data))
-			.or_else(|_| easy_decompress::<format::Reference>(&raw_data))
-			.or_else(|_| -> Result<Vec<u8>, Box<dyn Error>> { Ok(raw_data.clone()) })?;
+			// .or_else(|_| easy_decompress::<format::Reference>(&raw_data))
+			.unwrap_or(raw_data.clone());
 
 		Ok(Self {
 			id: index_entry.id.clone(),
@@ -122,6 +121,16 @@ impl Resource {
 
 	pub fn decode(&self, title: &str) -> Result<DecodedResource, Box<dyn Error>> {
 		DecodedResource::new(self, title)
+	}
+
+	pub fn compress(&mut self) -> Result<bool, Box<dyn Error>> {
+		let new_data = easy_compress::<format::Maxis>(&self.data, CompressionOptions::Optimal)?;
+		if new_data.len() < self.data.len() {
+			self.data = new_data;
+			Ok(true)
+		} else {
+			Ok(false)
+		}
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {

@@ -9,6 +9,7 @@ use binrw::{ BinRead, BinWrite };
 use crate::dbpf::header::Header;
 use crate::dbpf::index_entry::IndexEntry;
 use crate::dbpf::resource::{ Resource, DecodedResource };
+use crate::dbpf::resource_types::dir::{ Dir, DirItem };
 
 pub mod header;
 pub mod index_entry;
@@ -46,18 +47,32 @@ impl Dbpf {
 		})
 	}
 
-	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-		let mut header = self.header.clone();
-		header.index_entry_count = self.resources.len() as u32;
-
-		let raw_resources = self.resources
+	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, compress: bool) -> Result<(), Box<dyn Error>> {
+		let mut resources = self.resources
 			.iter()
 			.map(|r| -> Result<Resource, Box<dyn Error>> { r.to_resource() })
 			.collect::<Result<Vec<Resource>, Box<dyn Error>>>()?;
 
+		if compress {
+			let mut dir_items = Vec::new();
+			for resource in resources.iter_mut() {
+				let uncompressed_size = resource.data.len() as u32;
+				if resource.compress()? {
+					dir_items.push(DirItem{ id: resource.id.clone(), uncompressed_size })
+				}
+			}
+			if !dir_items.is_empty() {
+				let dir = Dir::new(dir_items);
+				resources.insert(0, Resource{ id: dir.id.clone(), data: dir.to_bytes()? });
+			}
+		}
+
+		let mut header = self.header.clone();
+		header.index_entry_count = self.resources.len() as u32;
+
 		let mut index_entries = Vec::new();
 		let mut offset = if header.minor_version >= 1 { 96 } else { 92 };
-		for resource in &raw_resources {
+		for resource in &resources {
 			let index_entry = IndexEntry::from_resource(resource, offset);
 			index_entries.push(index_entry);
 			offset += resource.data.len() as u32;
@@ -69,7 +84,7 @@ impl Dbpf {
 
 		header.write(writer)?;
 
-		for resource in &raw_resources {
+		for resource in &resources {
 			resource.write(writer)?;
 		}
 
@@ -86,12 +101,12 @@ impl Dbpf {
 		self.resources.dedup_by_key(|res| res.get_id().to_string());
 	}
 
-	pub fn write_package_file(resources: &[DecodedResource], path: &str) -> Result<(), Box<dyn Error>> {
+	pub fn write_package_file(resources: &[DecodedResource], path: &str, compress: bool) -> Result<(), Box<dyn Error>> {
 		let mut new_dbpf = Dbpf::new(resources.to_vec())?;
 		new_dbpf.clean_up_resources();
 
 		let mut cur = Cursor::new(Vec::new());
-		new_dbpf.write(&mut cur)?;
+		new_dbpf.write(&mut cur, compress)?;
 
 		let mut new_file = File::create(path)?;
 		new_file.write_all(&cur.into_inner())?;
@@ -105,6 +120,7 @@ impl Dbpf {
 pub enum TypeId {
 	#[default]
 	Unknown = 0xFFFFFFFF,
+	Dir = 0xE86B1EEF,
 	Gmdc = 0xAC4F8687,
 	Gmnd = 0x7BA3838C,
 	Shpe = 0xFC6EB1F7,
@@ -126,6 +142,7 @@ pub enum TypeId {
 impl From<u32> for TypeId {
 	fn from(value: u32) -> Self {
 		match value {
+			0xE86B1EEF => Self::Dir,
 			0xAC4F8687 => Self::Gmdc,
 			0x7BA3838C => Self::Gmnd,
 			0xFC6EB1F7 => Self::Shpe,
@@ -150,6 +167,7 @@ impl From<u32> for TypeId {
 impl fmt::Display for TypeId {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			Self::Dir => write!(f, "DIR"),
 			Self::Gmdc => write!(f, "GMDC"),
 			Self::Gmnd => write!(f, "GMND"),
 			Self::Shpe => write!(f, "SHPE"),

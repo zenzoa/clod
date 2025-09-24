@@ -80,7 +80,7 @@ pub fn save_skins(path: &Path, new_path: &Path) -> Result<(), Box<dyn Error>> {
 		if let Some(resources) = outfit_groups.get(name) {
 			let mut file_path = new_path.to_path_buf();
 			file_path.push(format!("{name}.package"));
-			Dbpf::write_package_file(resources, &file_path.to_string_lossy())?;
+			Dbpf::write_package_file(resources, &file_path.to_string_lossy(), false)?;
 		}
 	}
 
