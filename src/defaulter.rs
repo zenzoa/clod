@@ -172,7 +172,7 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 				}
 
 				// create BINX resource
-				let sort_index = new_gzps.id.group_id;
+				let sort_index = new_gzps.id.group_id + i as u32;
 				new_outfit.binx = Some(new_outfit.generate_binx(sort_index, 1));
 
 				// add additional references to 3IDR

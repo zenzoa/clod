@@ -68,7 +68,7 @@ impl Dbpf {
 		}
 
 		let mut header = self.header.clone();
-		header.index_entry_count = self.resources.len() as u32;
+		header.index_entry_count = resources.len() as u32;
 
 		let mut index_entries = Vec::new();
 		let mut offset = if header.minor_version >= 1 { 96 } else { 92 };
