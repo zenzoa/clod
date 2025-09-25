@@ -39,6 +39,9 @@ enum Command {
 		/// Set product ids to Base Game to remove pack icon
 		#[arg(short, long)]
 		product_fix: bool,
+		/// Set flags to 0 to make outfit visible in CAS and wearable by townies
+		#[arg(short, long)]
+		flag_fix: bool,
 	},
 	/// Extracts outfits from game files for use in default replacements
 	ExtractOutfits {
@@ -53,12 +56,12 @@ enum Command {
 fn main() -> Result<(), Box<dyn Error + 'static>> {
 	let args = Args::parse();
 	match args.command {
-		Some(Command::DefaultOutfit{ original, replacements, compress, ignore_missing, gender_fix, product_fix }) => {
+		Some(Command::DefaultOutfit{ original, replacements, compress, ignore_missing, gender_fix, product_fix, flag_fix }) => {
 			let default_folder = original.parent().unwrap_or(Path::new("./")).to_path_buf();
 			defaulter::default_outfit(
 				&original,
 				&replacements.unwrap_or(default_folder),
-				DefaultSettings{ compress, ignore_missing, gender_fix, product_fix }
+				DefaultSettings{ compress, ignore_missing, gender_fix, product_fix, flag_fix }
 			)
 		}
 		Some(Command::ExtractOutfits{ input, output }) => {

@@ -206,7 +206,7 @@ impl Outfit {
 		resources
 	}
 
-	pub fn generate_binx(&self, sort_index: u32, string_index: u32) -> Binx {
+	pub fn generate_binx(&self) -> Binx {
 		let mut id = self.idr.id.clone();
 		id.type_id = TypeId::Binx;
 		let key = self.gzps.max_resource_key();
@@ -217,8 +217,8 @@ impl Outfit {
 			bin_idx: key + 3,
 			object_idx: key + 4,
 			creator_id: PascalString::new("00000000-0000-0000-0000-000000000000"),
-			sort_index,
-			string_index
+			sort_index: 0,
+			string_index: 1
 		}
 	}
 }

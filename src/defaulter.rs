@@ -18,7 +18,8 @@ pub struct DefaultSettings {
 	pub compress: bool,
 	pub ignore_missing: bool,
 	pub gender_fix: bool,
-	pub product_fix: bool
+	pub product_fix: bool,
+	pub flag_fix: bool
 }
 
 #[derive(Clone, Default)]
@@ -172,8 +173,7 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 				}
 
 				// create BINX resource
-				let sort_index = new_gzps.id.group_id + i as u32;
-				new_outfit.binx = Some(new_outfit.generate_binx(sort_index, 1));
+				new_outfit.binx = Some(new_outfit.generate_binx());
 
 				// add additional references to 3IDR
 				new_outfit.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
@@ -181,8 +181,10 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 				new_outfit.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x0FFEFEFE, 0x0FFE0080, 0));
 				new_outfit.idr.gzps_ref = Some(new_gzps.id.clone());
 
-				// set flags to 0 so outfit won't be hidden
-				new_gzps.flags = 0;
+				// set flags so outfit won't be hidden
+				if new_gzps.flags & 1 == 1 {
+					new_gzps.flags -= 1;
+				}
 
 			} else {
 				// if not adding BINX, remove unnecessary 3IDR properties
@@ -190,6 +192,11 @@ fn save_package(data: &SivData) -> Result<(), Box<dyn Error>> {
 				new_outfit.idr.str_ref = None;
 				new_outfit.idr.coll_ref = None;
 				new_outfit.idr.gzps_ref = None;
+			}
+
+			// set flags to 0 to make it visible and townified
+			if data.settings.flag_fix {
+				new_gzps.flags = 0
 			}
 
 			// copy new GZPS back to outfit
