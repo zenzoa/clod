@@ -9,8 +9,6 @@ mod outfit;
 mod defaulter;
 mod extractor;
 
-use defaulter::DefaultSettings;
-
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -22,11 +20,14 @@ struct Args {
 enum Command {
 	/// Generates a default replacement for a TS2 outfit
 	DefaultOutfit {
-		/// Package containing original outfit(s)' GZPS and 3IDR resources
+		/// Package or folder of packages containing original outfit(s)' GZPS and 3IDR resources
 		original: PathBuf,
 		/// Folder containing replacement mesh and recolor packages
 		#[arg(short, long, value_name="FOLDER")]
-		replacements: Option<PathBuf>,
+		replacement: Option<PathBuf>,
+		/// Output file name
+		#[arg(short, long, value_name="FILENAME")]
+		output: Option<PathBuf>,
 		/// Compress resources
 		#[arg(short, long)]
 		compress: bool,
@@ -56,12 +57,13 @@ enum Command {
 fn main() -> Result<(), Box<dyn Error + 'static>> {
 	let args = Args::parse();
 	match args.command {
-		Some(Command::DefaultOutfit{ original, replacements, compress, ignore_missing, gender_fix, product_fix, flag_fix }) => {
-			let default_folder = original.parent().unwrap_or(Path::new("./")).to_path_buf();
+		Some(Command::DefaultOutfit{ original, replacement, output, compress, product_fix, .. }) => {
 			defaulter::default_outfit(
-				&original,
-				&replacements.unwrap_or(default_folder),
-				DefaultSettings{ compress, ignore_missing, gender_fix, product_fix, flag_fix }
+				original,
+				replacement,
+				output,
+				compress,
+				product_fix
 			)
 		}
 		Some(Command::ExtractOutfits{ input, output }) => {

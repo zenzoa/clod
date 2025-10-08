@@ -3,6 +3,7 @@ use std::io::{ Cursor, Read, Write };
 use std::fmt;
 use std::convert::From;
 use std::fs::File;
+use std::path::Path;
 
 use binrw::{ BinRead, BinWrite };
 
@@ -101,7 +102,7 @@ impl Dbpf {
 		self.resources.dedup_by_key(|res| res.get_id().to_string());
 	}
 
-	pub fn write_package_file(resources: &[DecodedResource], path: &str, compress: bool) -> Result<(), Box<dyn Error>> {
+	pub fn write_package_file(resources: &[DecodedResource], path: &Path, compress: bool) -> Result<(), Box<dyn Error>> {
 		let mut new_dbpf = Dbpf::new(resources.to_vec())?;
 		new_dbpf.clean_up_resources();
 

@@ -279,12 +279,12 @@ impl Gzps {
 pub enum Category {
 	Everyday = 7,
 	Swimwear = 8,
-	Sleepwear = 16,
+	PJs = 16,
 	Formal = 32,
-	Underwear = 64,
+	Undies = 64,
 	Skin = 128,
 	Maternity = 256,
-	Fitness = 512,
+	Athletic = 512,
 	TryOn = 1024,
 	Overlay = 2048,
 	Outerwear = 4096
@@ -295,12 +295,12 @@ impl Category {
 		let mut categories = Vec::new();
 		if flag & Self::Everyday as u32 > 0 { categories.push(Self::Everyday) }
 		if flag & Self::Swimwear as u32 > 0 { categories.push(Self::Swimwear) }
-		if flag & Self::Sleepwear as u32 > 0 { categories.push(Self::Sleepwear) }
+		if flag & Self::PJs as u32 > 0 { categories.push(Self::PJs) }
 		if flag & Self::Formal as u32 > 0 { categories.push(Self::Formal) }
-		if flag & Self::Underwear as u32 > 0 { categories.push(Self::Underwear) }
+		if flag & Self::Undies as u32 > 0 { categories.push(Self::Undies) }
 		if flag & Self::Skin as u32 > 0 { categories.push(Self::Skin) }
 		if flag & Self::Maternity as u32 > 0 { categories.push(Self::Maternity) }
-		if flag & Self::Fitness as u32 > 0 { categories.push(Self::Fitness) }
+		if flag & Self::Athletic as u32 > 0 { categories.push(Self::Athletic) }
 		if flag & Self::TryOn as u32 > 0 { categories.push(Self::TryOn) }
 		if flag & Self::Overlay as u32 > 0 { categories.push(Self::Overlay) }
 		if flag & Self::Outerwear as u32 > 0 { categories.push(Self::Outerwear) }
@@ -315,18 +315,25 @@ impl Category {
 		flag
 	}
 
-	// pub fn stringify(categories: &[Self]) -> String {
-	// 	let mut category_string = String::new();
-	// 	if categories.contains(&Self::Everyday) { category_string.push('e'); }
-	// 	if categories.contains(&Self::Swimwear) { category_string.push('b'); }
-	// 	if categories.contains(&Self::Sleepwear) { category_string.push('s'); }
-	// 	if categories.contains(&Self::Formal) { category_string.push('f'); }
-	// 	if categories.contains(&Self::Underwear) { category_string.push('u'); }
-	// 	if categories.contains(&Self::Maternity) { category_string.push('m'); }
-	// 	if categories.contains(&Self::Fitness) { category_string.push('a'); }
-	// 	if categories.contains(&Self::Outerwear) { category_string.push('o'); }
-	// 	category_string
-	// }
+	pub fn toggle_category(categories: &mut Vec<Self>, category: Self, value: bool) {
+		if value {
+			Self::add_category(categories, category);
+		} else {
+			Self::remove_category(categories, category);
+		}
+	}
+
+	pub fn add_category(categories: &mut Vec<Self>, category: Self) {
+		if !categories.contains(&category) {
+			categories.push(category);
+		}
+	}
+
+	pub fn remove_category(categories: &mut Vec<Self>, category: Self) {
+		if let Some(i) = categories.iter().position(|x| *x == category) {
+			categories.remove(i);
+		}
+	}
 }
 
 #[repr(u32)]
@@ -369,6 +376,26 @@ impl Age {
 			(a.contains(&Self::Elder) && b.contains(&Self::Elder))
 	}
 
+	pub fn toggle_age(ages: &mut Vec<Self>, age: Self, value: bool) {
+		if value {
+			Self::add_age(ages, age);
+		} else {
+			Self::remove_age(ages, age);
+		}
+	}
+
+	pub fn add_age(ages: &mut Vec<Self>, age: Self) {
+		if !ages.contains(&age) {
+			ages.push(age);
+		}
+	}
+
+	pub fn remove_age(ages: &mut Vec<Self>, age: Self) {
+		if let Some(i) = ages.iter().position(|x| *x == age) {
+			ages.remove(i);
+		}
+	}
+
 	pub fn stringify(ages: &[Self]) -> String {
 		let mut age_string = String::new();
 		if ages.contains(&Self::Baby) { age_string.push('b'); }
@@ -409,6 +436,26 @@ impl Gender {
 		ages.contains(&Age::Baby) || ages.contains(&Age::Toddler) || ages.contains(&Age::Child) ||
 			(genders1.len() == 1 && genders2.contains(&genders1[0])) ||
 			(genders1.len() >= 2 && !genders2.is_empty())
+	}
+
+	pub fn toggle_gender(genders: &mut Vec<Self>, gender: Self, value: bool) {
+		if value {
+			Self::add_gender(genders, gender);
+		} else {
+			Self::remove_gender(genders, gender);
+		}
+	}
+
+	pub fn add_gender(genders: &mut Vec<Self>, gender: Self) {
+		if !genders.contains(&gender) {
+			genders.push(gender);
+		}
+	}
+
+	pub fn remove_gender(genders: &mut Vec<Self>, gender: Self) {
+		if let Some(i) = genders.iter().position(|x| *x == gender) {
+			genders.remove(i);
+		}
 	}
 
 	pub fn stringify(genders: &[Self]) -> String {
