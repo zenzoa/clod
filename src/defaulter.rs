@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::{fs, usize};
+use std::fs;
 use std::path::PathBuf;
 
 use cursive::{ Cursive, With };
@@ -23,25 +23,20 @@ struct SivData {
 }
 
 pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: Option<PathBuf>, compress: bool, product_fix: bool) -> Result<(), Box<dyn Error>> {
-	let replacement_path = replacement.unwrap_or(original.clone());
-
-	let output_path = output.unwrap_or(
-		if original.is_file() {
-			original.with_file_name(if let Some(file_name) = original.file_name() {
-				file_name.to_string_lossy().replace(".package", "_DEFAULT.package")
-			} else {
-				"DEFAULT.package".to_string()
-			})
-		} else {
-			original.join("DEFAULT.package")
-		}
-	);
+	let original = if original.parent().is_some() && original.parent().unwrap().to_string_lossy() == "" {
+		let mut relative_path = PathBuf::from("./");
+		relative_path.push(original);
+		relative_path
+	} else {
+		original
+	};
+	let replacement_path = replacement.unwrap_or(PathBuf::from("./"));
 
 	// get original package(s)
 	let source_files: Vec<PathBuf> = if original.is_file() {
 		vec![original.to_path_buf()]
 	} else {
-		fs::read_dir(original)?
+		fs::read_dir(&original)?
 			.filter_map(|entry|
 				match entry {
 					Ok(entry) => if entry.file_name().to_string_lossy().ends_with(".package") {
@@ -108,11 +103,23 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 	let mut outfits = Vec::new();
 	for resource in &resources {
 		if let DecodedResource::Gzps(gzps) = resource {
-			let outfit = Outfit::from_resources(gzps.clone(), &resources, false)?;
-			// let outfit = Outfit::from_resources(gzps.clone(), &resources, settings.ignore_missing)?;
+			let outfit = Outfit::from_resources(gzps.clone(), &resources, true)?;
 			outfits.push(outfit);
 		}
 	}
+
+	// set output path
+	let output_path = output.unwrap_or(
+		if source_files.len() == 1 {
+			source_files[0].with_file_name(if let Some(file_name) = source_files[0].file_name() {
+				file_name.to_string_lossy().replace(".package", "_DEFAULT.package")
+			} else {
+				"DEFAULT.package".to_string()
+			})
+		} else {
+			original.join("DEFAULT.package")
+		}
+	);
 
 	let mut siv = cursive::default();
 
@@ -134,7 +141,6 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 					data.gzps_list.iter().enumerate().map(|(i, gzps)|
 						(gzps.name.to_string(), i)))
 					.on_select(update_props)
-					.on_submit(|s, _| { s.focus_name("outfit_select").unwrap(); })
 					.with_name("gzps_select")
 					.full_height()
 					.scrollable()))
@@ -179,9 +185,9 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 						.child(Checkbox::new().on_change(|s, val|
 							set_category(s, Category::Outerwear, val)).with_name("outerwear"))
 						.child(TextView::new("❄️ "))
-						// .child(Checkbox::new().on_change(|s, val|
-						// 	set_category(s, Category::Maternity, val)).with_name("maternity"))
-						// .child(TextView::new("🫄 "))
+						.child(Checkbox::new().on_change(|s, val|
+							set_category(s, Category::Maternity, val)).with_name("maternity"))
+						.child(TextView::new("🫄"))
 					)
 					.child(TextView::new("\nAge:"))
 					.child(LinearLayout::horizontal()
@@ -242,6 +248,7 @@ fn update_props(s: &mut Cursive, i: &usize) {
 	let mut swimwear_checkbox = s.find_name::<Checkbox>("swimwear").unwrap();
 	let mut athletic_checkbox = s.find_name::<Checkbox>("athletic").unwrap();
 	let mut outerwear_checkbox = s.find_name::<Checkbox>("outerwear").unwrap();
+	let mut maternity_checkbox = s.find_name::<Checkbox>("maternity").unwrap();
 
 	let mut baby_checkbox = s.find_name::<Checkbox>("baby").unwrap();
 	let mut toddler_checkbox = s.find_name::<Checkbox>("toddler").unwrap();
@@ -282,6 +289,7 @@ fn update_props(s: &mut Cursive, i: &usize) {
 		swimwear_checkbox.set_checked(gzps.category.contains(&Category::Swimwear));
 		athletic_checkbox.set_checked(gzps.category.contains(&Category::Athletic));
 		outerwear_checkbox.set_checked(gzps.category.contains(&Category::Outerwear));
+		maternity_checkbox.set_checked(gzps.category.contains(&Category::Maternity));
 
 		baby_checkbox.set_checked(gzps.age.contains(&Age::Baby));
 		toddler_checkbox.set_checked(gzps.age.contains(&Age::Toddler));
@@ -337,16 +345,13 @@ fn reset_flags(s: &mut Cursive) {
 	let gzps_select = s.find_name::<SelectView::<usize>>("gzps_select").unwrap();
 	let i = gzps_select.selected_id().unwrap();
 	let mut flags_text = s.find_name::<TextView>("flags").unwrap();
-	let show_checkbox = s.find_name::<Checkbox>("show").unwrap();
-	let townies_checkbox = s.find_name::<Checkbox>("townies").unwrap();
+	let mut show_checkbox = s.find_name::<Checkbox>("show").unwrap();
+	let mut townies_checkbox = s.find_name::<Checkbox>("townies").unwrap();
 	s.with_user_data(|data: &mut SivData| {
 		let gzps = &mut data.gzps_list[i];
-		gzps.flags = match (show_checkbox.is_checked(), townies_checkbox.is_checked()) {
-			(true, true) => 0,
-			(true, false) => 8,
-			(false, true) => 1,
-			(false, false) => 9
-		};
+		gzps.flags = 0;
+		show_checkbox.set_checked(true);
+		townies_checkbox.set_checked(true);
 		flags_text.set_content(format!("{}", gzps.flags));
 	});
 }
@@ -424,7 +429,7 @@ fn save_package(s: &mut Cursive) {
 				if outfit_name.starts_with('y') && outfit_name.contains("clone") {
 					// create a STR# if none exists with this outfit's group id
 					let text_list_id = Identifier::new(TypeId::TextList as u32, new_gzps.id.group_id, 0x1, 0);
-					if text_lists.iter().find(|t| t.id.group_id == new_gzps.id.group_id).is_none() {
+					if !text_lists.iter().any(|t| t.id.group_id == new_gzps.id.group_id) {
 						text_lists.push(TextList::create_empty(text_list_id.clone()));
 					}
 
@@ -477,7 +482,7 @@ fn save_package(s: &mut Cursive) {
 				.button("Ok", |s| s.quit()));
 		}
 		Err(why) => {
-			s.add_layer(Dialog::around(TextView::new(&format!("{}", why)))
+			s.add_layer(Dialog::around(TextView::new(format!("{}", why)))
 				.button("Ok", |s| s.quit()));
 		}
 	}
