@@ -8,6 +8,7 @@ mod dbpf;
 mod outfit;
 mod defaulter;
 mod extractor;
+mod compressor;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -30,6 +31,11 @@ enum Command {
 		/// Folder to extract outfit packages to
 		#[arg(short, long, value_name="FOLDER")]
 		output: Option<PathBuf>
+	},
+	/// Compresses resources in package files
+	Compress {
+		/// List of package files to compress
+		files: Vec<PathBuf>
 	}
 }
 
@@ -46,6 +52,9 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 				&input_folder,
 				&output.unwrap_or(default_output)
 			)
+		}
+		Some(Command::Compress{ files }) => {
+			compressor::compress_packages(files)
 		}
 		None => Err("No command given.".into())
 	}
