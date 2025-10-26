@@ -3,6 +3,9 @@ on:
     types: [created]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   release:
     name: Release - ${{ matrix.platform.release_for }}
