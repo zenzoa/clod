@@ -20,29 +20,8 @@ struct Args {
 enum Command {
 	/// Generates a default replacement for a TS2 outfit
 	DefaultOutfit {
-		/// Package or folder of packages containing original outfit(s)' GZPS and 3IDR resources
-		original: PathBuf,
-		/// Folder containing replacement mesh and recolor packages
-		#[arg(short, long, value_name="FOLDER")]
-		replacement: Option<PathBuf>,
-		/// Output file name
-		#[arg(short, long, value_name="FILENAME")]
-		output: Option<PathBuf>,
-		/// Compress resources
-		#[arg(short, long)]
-		compress: bool,
-		/// Ignore missing mesh/texture resources
-		#[arg(short, long)]
-		ignore_missing: bool,
-		/// Enable baby, toddler, and child outfits for all genders
-		#[arg(short, long)]
-		gender_fix: bool,
-		/// Set product ids to Base Game to remove pack icon
-		#[arg(short, long)]
-		product_fix: bool,
-		/// Set flags to 0 to make outfit visible in CAS and wearable by townies
-		#[arg(short, long)]
-		flag_fix: bool,
+		/// Folder containing original outfits, and subfolder(s) containing replacements
+		source: Option<PathBuf>
 	},
 	/// Extracts outfits from game files for use in default replacements
 	ExtractOutfits {
@@ -57,14 +36,8 @@ enum Command {
 fn main() -> Result<(), Box<dyn Error + 'static>> {
 	let args = Args::parse();
 	match args.command {
-		Some(Command::DefaultOutfit{ original, replacement, output, compress, product_fix, .. }) => {
-			defaulter::default_outfit(
-				original,
-				replacement,
-				output,
-				compress,
-				product_fix
-			)
+		Some(Command::DefaultOutfit{ source }) => {
+			defaulter::default_outfit(source)
 		}
 		Some(Command::ExtractOutfits{ input, output }) => {
 			let input_folder = input.unwrap_or(PathBuf::from("./"));

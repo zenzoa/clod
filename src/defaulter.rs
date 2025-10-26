@@ -1,10 +1,11 @@
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
+use std::ffi::OsString;
 
 use cursive::{ Cursive, With };
 use cursive::view::{ Nameable, Scrollable, Resizable };
-use cursive::views::{ Dialog, Button, TextView, Checkbox, SelectView, LinearLayout, Panel, PaddedView };
+use cursive::views::{ Dialog, Button, TextView, EditView, Checkbox, SelectView, LinearLayout, Panel, PaddedView };
 
 use crate::dbpf::{ Dbpf, Identifier, TypeId };
 use crate::dbpf::resource::DecodedResource;
@@ -17,39 +18,37 @@ struct SivData {
 	output_path: PathBuf,
 	gzps_list: Vec<Gzps>,
 	outfits: Vec<Outfit>,
-	pairings: Vec<Option<usize>>,
-	compress: bool,
-	product_fix: bool
+	pairings: Vec<Option<usize>>
 }
 
-pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: Option<PathBuf>, compress: bool, product_fix: bool) -> Result<(), Box<dyn Error>> {
-	let original = if original.parent().is_some() && original.parent().unwrap().to_string_lossy() == "" {
-		let mut relative_path = PathBuf::from("./");
-		relative_path.push(original);
-		relative_path
-	} else {
-		original
-	};
-	let replacement_path = replacement.unwrap_or(PathBuf::from("./"));
+pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
+	let source_dir = source.unwrap_or(PathBuf::from("./"));
 
-	// get original package(s)
-	let source_files: Vec<PathBuf> = if original.is_file() {
-		vec![original.to_path_buf()]
-	} else {
-		fs::read_dir(&original)?
-			.filter_map(|entry|
-				match entry {
-					Ok(entry) => if entry.file_name().to_string_lossy().ends_with(".package") {
-						Some(entry.path())
-					} else {
-						None
-					},
-					Err(_) => None
-				}).collect()
-	};
+	// get original files from source dir, and replacement files from any subfolders
+	let mut original_files = Vec::new();
+	let mut replacement_files = Vec::new();
+	for entry in fs::read_dir(&source_dir)? {
+		if let Ok(entry) = entry {
+			let entry_path = entry.path();
+			if entry_path.is_file() && entry_path.extension().unwrap_or(&OsString::new()) == OsString::from("package") {
+				original_files.push(entry_path);
+			} else if entry_path.is_dir() {
+				for subentry in fs::read_dir(entry_path)? {
+					if let Ok(subentry) = subentry {
+						let subentry_path = subentry.path();
+						if subentry_path.is_file() && subentry_path.extension().unwrap_or(&OsString::new()) == OsString::from("package") {
+							replacement_files.push(subentry_path);
+						}
+					}
+				}
+			}
+		}
+	}
+	original_files.sort();
+	replacement_files.sort();
 
 	// get all GZPS resources in original package(s)
-	let mut gzps_list: Vec<Gzps> = source_files
+	let mut gzps_list: Vec<Gzps> = original_files
 		.iter()
 		.map(|path| {
 			let bytes = fs::read(path)?;
@@ -71,21 +70,7 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 	gzps_list.sort_by_key(|gzps| gzps.name.to_string());
 	let pairings: Vec<Option<usize>> = gzps_list.iter().map(|_| None).collect();
 
-	// read all packages in replacement folder
-	let mut replacement_files: Vec<PathBuf> = fs::read_dir(replacement_path)?
-		.filter_map(|entry|
-			match entry {
-				Ok(entry) => {
-					if entry.file_name().to_string_lossy().ends_with(".package") &&
-						!source_files.contains(&entry.path()) {
-							Some(entry.path())
-					} else {
-						None
-					}
-				},
-				Err(_) => None
-			}).collect();
-	replacement_files.sort();
+	// get all resources from replacement package(s)
 	let resources: Vec<DecodedResource> = replacement_files
 		.iter()
 		.map(|replacement| {
@@ -108,18 +93,16 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 		}
 	}
 
-	// set output path
-	let output_path = output.unwrap_or(
-		if source_files.len() == 1 {
-			source_files[0].with_file_name(if let Some(file_name) = source_files[0].file_name() {
-				file_name.to_string_lossy().replace(".package", "_DEFAULT.package")
-			} else {
-				"DEFAULT.package".to_string()
-			})
+	// set default output path
+	let output_path = if original_files.len() == 1 {
+		original_files[0].with_file_name(if let Some(file_name) = original_files[0].file_name() {
+			file_name.to_string_lossy().replace(".package", "_DEFAULT.package")
 		} else {
-			original.join("DEFAULT.package")
-		}
-	);
+			"DEFAULT.package".to_string()
+		})
+	} else {
+		source_dir.join("DEFAULT.package")
+	};
 
 	let mut siv = cursive::default();
 
@@ -127,9 +110,7 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 		output_path,
 		gzps_list,
 		outfits,
-		pairings,
-		compress,
-		product_fix
+		pairings
 	};
 	siv.set_user_data(data.clone());
 
@@ -223,7 +204,7 @@ pub fn default_outfit(original: PathBuf, replacement: Option<PathBuf>, output: O
 					.full_width()
 					.scrollable()))
 			.button("Quit", |s| { s.quit(); })
-			.button("Save", save_package)
+			.button("Save", ask_for_filename)
 			.full_screen()
 	);
 
@@ -383,10 +364,37 @@ fn set_gender(s: &mut Cursive, gender: Gender, value: bool) {
 	});
 }
 
-fn save_package(s: &mut Cursive) {
-	let mut resources = Vec::new();
+fn ask_for_filename(s: &mut Cursive) {
 	let mut output_path = PathBuf::new();
-	let mut compress = true;
+	s.with_user_data(|data: &mut SivData| {
+		output_path = data.output_path.clone();
+	});
+	s.add_layer(
+		Dialog::around(
+				LinearLayout::vertical()
+					.child(EditView::new()
+						.content(output_path.to_string_lossy())
+						.with_name("filename"))
+					.child(LinearLayout::horizontal()
+						.child(Checkbox::new().checked().with_name("product_fix"))
+						.child(TextView::new("Hide pack icon")))
+					.child(LinearLayout::horizontal()
+						.child(Checkbox::new().checked().with_name("compress"))
+						.child(TextView::new("Compress resources"))))
+			.title("Save Default Replacement")
+			.button("Cancel", |s| { s.pop_layer(); })
+			.button("Ok", save_package)
+	);
+}
+
+fn save_package(s: &mut Cursive) {
+	let filename_str = s.find_name::<EditView>("filename").unwrap().get_content();
+	let output_path = PathBuf::from(filename_str.as_str());
+
+	let product_fix = s.find_name::<Checkbox>("product_fix").unwrap().is_checked();
+	let compress = s.find_name::<Checkbox>("compress").unwrap().is_checked();
+
+	let mut resources = Vec::new();
 
 	s.with_user_data(|data: &mut SivData| {
 		let mut new_outfits = Vec::new();
@@ -402,11 +410,6 @@ fn save_package(s: &mut Cursive) {
 				new_gzps.shoe = new_outfit.gzps.shoe;
 				new_gzps.overrides = new_outfit.gzps.overrides.clone();
 
-				// enable for both genders if baby/toddler/child
-				// if data.gender_fix && (new_gzps.age.contains(&Age::Baby) || new_gzps.age.contains(&Age::Toddler) || new_gzps.age.contains(&Age::Child)) {
-				// 	new_gzps.gender = vec![Gender::Male, Gender::Female];
-				// }
-
 				// enable for young adult + adult
 				if new_gzps.age.contains(&Age::YoungAdult) && !new_gzps.age.contains(&Age::Adult) {
 					new_gzps.age.push(Age::Adult);
@@ -415,7 +418,7 @@ fn save_package(s: &mut Cursive) {
 				}
 
 				// set product to Base Game to remove pack icon
-				if data.product_fix {
+				if product_fix {
 					new_gzps.product = Some(1);
 				}
 
@@ -470,9 +473,6 @@ fn save_package(s: &mut Cursive) {
 			.map(|t| DecodedResource::TextList(t.clone()))
 			.collect::<Vec<DecodedResource>>();
 		resources.extend_from_slice(&text_list_resources);
-
-		output_path = data.output_path.clone();
-		compress = data.compress;
 	});
 
 	// save package file
