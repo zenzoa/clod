@@ -27,19 +27,15 @@ pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 	// get original files from source dir, and replacement files from any subfolders
 	let mut original_files = Vec::new();
 	let mut replacement_files = Vec::new();
-	for entry in fs::read_dir(&source_dir)? {
-		if let Ok(entry) = entry {
-			let entry_path = entry.path();
-			if entry_path.is_file() && entry_path.extension().unwrap_or(&OsString::new()) == OsString::from("package") {
-				original_files.push(entry_path);
-			} else if entry_path.is_dir() {
-				for subentry in fs::read_dir(entry_path)? {
-					if let Ok(subentry) = subentry {
-						let subentry_path = subentry.path();
-						if subentry_path.is_file() && subentry_path.extension().unwrap_or(&OsString::new()) == OsString::from("package") {
-							replacement_files.push(subentry_path);
-						}
-					}
+	for entry in (fs::read_dir(&source_dir)?).flatten() {
+		let entry_path = entry.path();
+		if entry_path.is_file() && entry_path.extension().unwrap_or(&OsString::new()) == "package" {
+			original_files.push(entry_path);
+		} else if entry_path.is_dir() {
+			for subentry in (fs::read_dir(entry_path)?).flatten() {
+				let subentry_path = subentry.path();
+				if subentry_path.is_file() && subentry_path.extension().unwrap_or(&OsString::new()) == "package" {
+					replacement_files.push(subentry_path);
 				}
 			}
 		}
@@ -142,7 +138,7 @@ pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 						.child(TextView::new("show "))
 						.child(Checkbox::new().on_change(set_townies).with_name("townies"))
 						.child(TextView::new("for townies   "))
-						.child(Button::new("reset", reset_flags)))
+						.child(Button::new("set to 0", reset_flags)))
 					.child(TextView::new("\nCategory:"))
 					.child(LinearLayout::horizontal()
 						.child(Checkbox::new().on_change(|s, val|
