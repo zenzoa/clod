@@ -34,5 +34,5 @@ jobs:
         uses: houseabsolute/actions-rust-release@v0
         with:
           executable-name: clod
-          extra-files:
+          changes-file: ""
           target: ${{ matrix.platform.target }}
