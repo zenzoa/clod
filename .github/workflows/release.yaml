@@ -1,6 +1,7 @@
 on:
   release:
     types: [created]
+  workflow_dispatch:
 
 jobs:
   release:
@@ -29,10 +30,8 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: "--release"
-          strip: true
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
           executable-name: clod
           target: ${{ matrix.platform.target }}
-        if: matrix.toolchain == 'stable'
