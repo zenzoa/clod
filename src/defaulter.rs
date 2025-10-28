@@ -5,7 +5,7 @@ use std::ffi::OsString;
 
 use cursive::{ Cursive, With };
 use cursive::view::{ Nameable, Scrollable, Resizable };
-use cursive::views::{ Dialog, Button, TextView, EditView, Checkbox, SelectView, LinearLayout, Panel, PaddedView };
+use cursive::views::{ Dialog, DialogFocus, Button, TextView, EditView, Checkbox, SelectView, LinearLayout, Panel, PaddedView };
 
 use crate::dbpf::{ Dbpf, Identifier, TypeId };
 use crate::dbpf::resource::DecodedResource;
@@ -370,22 +370,29 @@ fn ask_for_filename(s: &mut Cursive) {
 				LinearLayout::vertical()
 					.child(EditView::new()
 						.content(output_path.to_string_lossy())
-						.with_name("filename"))
+						.on_submit(|s, _| {
+							let mut filename_dialog = s.find_name::<Dialog>("filename_dialog").unwrap();
+							let _ = filename_dialog.set_focus(DialogFocus::Button(1));
+						})
+						.with_name("filename")
+						.min_width(40))
 					.child(LinearLayout::horizontal()
 						.child(Checkbox::new().checked().with_name("product_fix"))
 						.child(TextView::new("Hide pack icon")))
 					.child(LinearLayout::horizontal()
 						.child(Checkbox::new().checked().with_name("compress"))
 						.child(TextView::new("Compress resources"))))
+			.padding_lrtb(2, 2, 1, 0)
 			.title("Save Default Replacement")
 			.button("Cancel", |s| { s.pop_layer(); })
 			.button("Ok", save_package)
+			.with_name("filename_dialog")
 	);
 }
 
 fn save_package(s: &mut Cursive) {
-	let filename_str = s.find_name::<EditView>("filename").unwrap().get_content();
-	let output_path = PathBuf::from(filename_str.as_str());
+	let filename = s.find_name::<EditView>("filename").unwrap().get_content();
+	let output_path = PathBuf::from(filename.as_str());
 
 	let product_fix = s.find_name::<Checkbox>("product_fix").unwrap().is_checked();
 	let compress = s.find_name::<Checkbox>("compress").unwrap().is_checked();
