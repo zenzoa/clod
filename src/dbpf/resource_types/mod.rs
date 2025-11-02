@@ -14,6 +14,7 @@ pub mod txtr;
 pub mod gzps;
 pub mod idr;
 pub mod binx;
+pub mod xhtn;
 pub mod text_list;
 
 pub mod dir;

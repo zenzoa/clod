@@ -17,6 +17,7 @@ use crate::dbpf::resource_types::txtr::Txtr;
 use crate::dbpf::resource_types::gzps::Gzps;
 use crate::dbpf::resource_types::idr::Idr;
 use crate::dbpf::resource_types::binx::Binx;
+use crate::dbpf::resource_types::xhtn::Xhtn;
 use crate::dbpf::resource_types::text_list::TextList;
 
 #[derive(Clone)]
@@ -30,6 +31,7 @@ pub enum DecodedResource {
 	Gzps(Gzps),
 	Idr(Idr),
 	Binx(Binx),
+	Xhtn(Xhtn),
 	TextList(TextList),
 }
 
@@ -45,6 +47,7 @@ impl DecodedResource {
 			TypeId::Gzps => Ok(DecodedResource::Gzps(Gzps::new(resource, title)?)),
 			TypeId::Idr => Ok(DecodedResource::Idr(Idr::new(resource)?)),
 			TypeId::Binx => Ok(DecodedResource::Binx(Binx::new(resource)?)),
+			TypeId::Xhtn => Ok(DecodedResource::Xhtn(Xhtn::new(resource)?)),
 			TypeId::TextList => Ok(DecodedResource::TextList(TextList::new(resource)?)),
 			_ => Err("Unknown resource type".into())
 		}
@@ -61,6 +64,7 @@ impl DecodedResource {
 			Self::Gzps(gzps) => { gzps.to_bytes() }
 			Self::Idr(idr) => { idr.to_bytes() }
 			Self::Binx(binx) => { binx.to_bytes() }
+			Self::Xhtn(xhtn) => { xhtn.to_bytes() }
 			Self::TextList(text_list) => { text_list.to_bytes() }
 		}
 	}
@@ -76,6 +80,7 @@ impl DecodedResource {
 			Self::Gzps(gzps) => { gzps.id.clone() }
 			Self::Idr(idr) => { idr.id.clone() }
 			Self::Binx(binx) => { binx.id.clone() }
+			Self::Xhtn(xhtn) => { xhtn.id.clone() }
 			Self::TextList(text_list) => { text_list.id.clone() }
 		}
 	}
