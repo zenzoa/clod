@@ -30,7 +30,7 @@ pub struct Gzps {
 	pub priority: Option<u32>,
 	pub outfit_type: PascalString,
 	pub skintone: PascalString,
-	pub hairtone: PascalString,
+	pub hairtone: HairTone,
 	pub category: Vec<Category>,
 	pub shoe: Shoe,
 	pub fitness: u32,
@@ -136,7 +136,7 @@ impl Gzps {
 		};
 
 		gzps.hairtone = match cpf.props.get("hairtone") {
-			Some(PropertyValue::String(val)) => val.clone(),
+			Some(PropertyValue::String(val)) => HairTone::from_pascal_string(val),
 			_ => return Err("GZPS is missing \"hairtone\" property.".into())
 		};
 
@@ -223,7 +223,7 @@ impl Gzps {
 		}
 		props.insert("type".to_string(), PropertyValue::String(self.outfit_type.clone()));
 		props.insert("skintone".to_string(), PropertyValue::String(self.skintone.clone()));
-		props.insert("hairtone".to_string(), PropertyValue::String(self.hairtone.clone()));
+		props.insert("hairtone".to_string(), PropertyValue::String(self.hairtone.to_pascal_string()));
 		props.insert("category".to_string(), PropertyValue::Uint(Category::to_flag(&self.category)));
 		props.insert("shoe".to_string(), PropertyValue::Uint(self.shoe as u32));
 		props.insert("fitness".to_string(), PropertyValue::Uint(self.fitness));
@@ -248,24 +248,51 @@ impl Gzps {
 	}
 
 	pub fn generate_name(&self) -> String {
-		let age = Age::stringify(&self.age);
 		let gender = Gender::stringify(&self.gender);
 		let part = Part::stringify(&self.parts);
+		let full_name = self.name.to_string().to_lowercase().trim().to_string();
 
-		let full_name = self.name.to_string();
+		if self.parts.contains(&Part::Hair) {
+			let age = Age::stringify(&self.age, false);
+
+			let mut name_without_prefix = full_name.clone();
+			let re = Regex::new(r"^(?:casie_)?(?:contest_)?y?[bpctyaeu][mfu](?:hair)(.+)").unwrap();
+			for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
+				name_without_prefix = inner.to_string();
+			}
+
+			let hidden = if self.flags & 0x1 == 1 || self.flags & 0x20 & 1 == 1 { "_HIDDEN" } else { "" };
+			format!("{gender}{part}_{name_without_prefix}_{age}{hidden}_{}", &self.family.to_string()[0..8])
+
+		} else {
+			let age = Age::stringify(&self.age, true);
+
+			let mut name_without_prefix = full_name.clone();
+			let re = Regex::new(r"^(?:casie_)?(?:contest_)?[bpctyaeu][mfu](?:body)?(?:bottom)?(?:top)?([a-z,0-9]+)_?").unwrap();
+			for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
+				name_without_prefix = inner.to_string();
+			}
+
+			let mut name_without_ep = name_without_prefix.clone();
+			let re2 = Regex::new(r"([a-z,0-9]+)ep\d$").unwrap();
+			for (_, [inner]) in re2.captures_iter(&name_without_prefix).map(|c| c.extract()) {
+				name_without_ep = inner.to_string();
+			}
+
+			format!("{age}{gender}_{part}_{name_without_ep}")
+		}
+	}
+
+	pub fn generate_hair_folder_name(&self) -> String {
+		let gender = Gender::stringify(&self.gender);
+		let part = Part::stringify(&self.parts);
+		let full_name = self.name.to_string().to_lowercase().trim().to_string();
 		let mut name_without_prefix = full_name.clone();
-		let re = Regex::new(r"^(?:CASIE_)?(?:contest_)?[bpctyaeu][mfu](?:body)?(?:bottom)?(?:top)?([a-z,A-Z,0-9]+)_?").unwrap();
-		for (_, [inner_name]) in re.captures_iter(&full_name).map(|c| c.extract()) {
-			name_without_prefix = inner_name.to_string();
+		let re = Regex::new(r"^(?:casie_)?(?:contest_)?y?[bpctyaeu][mfu](?:hair)([a-z,0-9]+)_?").unwrap();
+		for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
+			name_without_prefix = inner.to_string();
 		}
-
-		let mut name_without_ep = name_without_prefix.clone();
-		let re2 = Regex::new(r"([a-z,A-Z,0-9]+)ep\d$").unwrap();
-		for (_, [inner_name]) in re2.captures_iter(&name_without_prefix).map(|c| c.extract()) {
-			name_without_ep = inner_name.to_string();
-		}
-
-		format!("{age}{gender}_{part}_{name_without_ep}")
+		format!("{gender}{part}_{name_without_prefix}")
 	}
 
 	pub fn max_resource_key(&self) -> u32 {
@@ -396,13 +423,18 @@ impl Age {
 		}
 	}
 
-	pub fn stringify(ages: &[Self]) -> String {
+	pub fn stringify(ages: &[Self], combine_adults: bool) -> String {
 		let mut age_string = String::new();
 		if ages.contains(&Self::Baby) { age_string.push('b'); }
 		if ages.contains(&Self::Toddler) { age_string.push('p'); }
 		if ages.contains(&Self::Child) { age_string.push('c'); }
 		if ages.contains(&Self::Teen) { age_string.push('t'); }
-		if ages.contains(&Self::Adult) || ages.contains(&Age::YoungAdult) { age_string.push('a'); }
+		if combine_adults {
+			if ages.contains(&Self::Adult) || ages.contains(&Age::YoungAdult) { age_string.push('a'); }
+		} else {
+			if ages.contains(&Self::Adult) { age_string.push('a'); }
+			if ages.contains(&Self::YoungAdult) { age_string.push('y'); }
+		}
 		if ages.contains(&Self::Elder) { age_string.push('e'); }
 		age_string
 	}
@@ -554,6 +586,52 @@ impl Part {
 		else if parts.contains(&Self::Accessory) { "accessory" }
 		else { "" })
 			.to_string()
+	}
+}
+
+#[derive(Copy, Clone, Default, PartialEq, Eq)]
+pub enum HairTone {
+	Black,
+	Brown,
+	Blond,
+	Red,
+	Grey,
+	#[default]
+	Other
+}
+
+impl HairTone {
+	pub fn from_pascal_string(pascal_string: &PascalString) -> Self {
+		match pascal_string.to_string().as_str() {
+			"00000001-0000-0000-0000-000000000000" => Self::Black,
+			"00000002-0000-0000-0000-000000000000" => Self::Brown,
+			"00000003-0000-0000-0000-000000000000" => Self::Blond,
+			"00000004-0000-0000-0000-000000000000" => Self::Red,
+			"00000005-0000-0000-0000-000000000000" => Self::Grey,
+			_ => Self::Other,
+		}
+	}
+
+	pub fn to_pascal_string(self) -> PascalString {
+		match self {
+			Self::Black => PascalString::new("00000001-0000-0000-0000-000000000000"),
+			Self::Brown => PascalString::new("00000002-0000-0000-0000-000000000000"),
+			Self::Blond => PascalString::new("00000003-0000-0000-0000-000000000000"),
+			Self::Red => PascalString::new("00000004-0000-0000-0000-000000000000"),
+			Self::Grey => PascalString::new("00000005-0000-0000-0000-000000000000"),
+			Self::Other => PascalString::new("00000006-0000-0000-0000-000000000000")
+		}
+	}
+
+	pub fn stringify(&self) -> String {
+		(match self {
+			Self::Black => "black",
+			Self::Brown => "brown",
+			Self::Blond => "blond",
+			Self::Red => "red",
+			Self::Grey => "grey",
+			Self::Other => "other"
+		}).to_string()
 	}
 }
 

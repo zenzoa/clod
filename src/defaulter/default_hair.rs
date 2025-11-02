@@ -1,0 +1,198 @@
+use std::error::Error;
+use std::fs;
+use std::path::PathBuf;
+use spinners::{ Spinner, Spinners };
+
+use crate::dbpf::{ Dbpf, PascalString, Identifier, TypeId };
+use crate::dbpf::resource::DecodedResource;
+use crate::dbpf::resource_types::gzps::{ Age, Gender, Category };
+use crate::outfit::Outfit;
+
+use super::{ get_default_replacement_files, extract_resources, extract_gzps };
+
+pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: bool, all_categories: bool, hide_pack_icon: bool, flags: Option<u32>, family: Option<String>) -> Result<(), Box<dyn Error>> {
+	let source_dir = source.unwrap_or(PathBuf::from("./"));
+
+	let abs_path = fs::canonicalize(&source_dir)?;
+	let dir_name = abs_path.file_name().map(|s| s.to_string_lossy()).unwrap_or("".into());
+	let default_output = source_dir.join(PathBuf::from(format!("{dir_name}_DEFAULT.package")));
+	let output_path = output.unwrap_or(default_output);
+
+	let (original_files, replacement_files) = get_default_replacement_files(&source_dir)?;
+
+	// get all GZPS resources in original package(s)
+	let gzps_list = extract_gzps(&original_files)?;
+	let mut pairings: Vec<Option<usize>> = gzps_list.iter().map(|_| None).collect();
+
+	// get all resources from replacement package(s)
+	let resources = extract_resources(&replacement_files)?;
+
+	// sort replacement resources into hairs
+	let mut replacement_hairs = Vec::new();
+	for resource in &resources {
+		if let DecodedResource::Gzps(gzps) = resource {
+			let hair = Outfit::from_resources(gzps.clone(), &resources, true)?;
+			replacement_hairs.push(hair);
+		}
+	}
+
+	let mut gender: Option<Gender> = None;
+	let mut age_color_sets = Vec::new();
+
+	let mut unused_warnings = Vec::new();
+	let mut unreplaced_warnings = Vec::new();
+
+	for (i, gzps) in gzps_list.iter().enumerate() {
+		if gzps.gender.len() == 1 {
+			gender = Some(gzps.gender[0]);
+		}
+		for (j, hair) in replacement_hairs.iter().enumerate() {
+			if gzps.hairtone == hair.gzps.hairtone &&
+				Age::are_compatible(&gzps.age, &hair.gzps.age) &&
+				Gender::are_compatible(&gzps.gender, &hair.gzps.gender, &gzps.age) {
+					if pairings[i].is_none() {
+						println!("Replacing {}", gzps.title);
+						pairings[i] = Some(j);
+						for age in &gzps.age {
+							age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false), gzps.hairtone.stringify()));
+						}
+					} else {
+						let age_color = format!("{}_{}", Age::stringify(&hair.gzps.age, false), hair.gzps.hairtone.stringify());
+						unused_warnings.push(format!("WARNING: unused replacement {} in \"{}\"", age_color, hair.title));
+					}
+			}
+		}
+		if pairings[i].is_none() {
+			let hidden = if gzps.flags & 1 == 1 { " (HIDDEN)" } else { "" };
+			unreplaced_warnings.push(format!("WARNING: \"{}\"{} not replaced", gzps.name, hidden));
+		}
+	}
+
+	let mut extra_hairs = Vec::new();
+	if add_ages {
+		for (j, hair) in replacement_hairs.iter().enumerate() {
+			if !pairings.contains(&Some(j)) && gender.is_none_or(|g| hair.gzps.gender.contains(&g)) {
+				let mut ages_to_add = Vec::new();
+				for age in &hair.gzps.age {
+					let age_color = format!("{}_{}", Age::stringify(&[*age], false), hair.gzps.hairtone.stringify());
+					if !age_color_sets.contains(&age_color) {
+						ages_to_add.push(*age);
+						age_color_sets.push(age_color.clone());
+						println!("Adding {age_color}");
+					}
+				}
+				if !ages_to_add.is_empty() {
+					extra_hairs.push((j, ages_to_add));
+				}
+			}
+		}
+	}
+
+	for warning in unused_warnings {
+		println!("{warning}");
+	}
+
+	for warning in unreplaced_warnings {
+		println!("{warning}");
+	}
+
+	// replace original hairs
+	let mut new_hairs = Vec::new();
+	for (i, replacement_hair_index) in pairings.iter().enumerate() {
+		if let Some(j) = *replacement_hair_index {
+			let mut new_gzps = gzps_list[i].clone();
+			let mut new_hair = replacement_hairs[j].clone();
+
+			// copy over overrides from replacement to original GZPS
+			new_gzps.overrides = new_hair.gzps.overrides.clone();
+
+			// enable for all categories
+			if all_categories {
+				new_gzps.category = vec![
+					Category::Everyday,
+					Category::Swimwear,
+					Category::PJs,
+					Category::Formal,
+					Category::Undies,
+					Category::Maternity,
+					Category::Athletic,
+					Category::Outerwear,
+				]
+			}
+
+			// set flags
+			if let Some(flags_value) = flags {
+				new_gzps.flags = flags_value;
+			}
+
+			// replace family with new value
+			if let Some(ref family_str) = family {
+				new_gzps.family = PascalString::new(family_str);
+			}
+
+			// set product to Base Game to remove pack icon
+			if hide_pack_icon {
+				new_gzps.product = Some(1);
+			}
+
+			// update 3IDR's TGIR to match GZPS's TGIR
+			new_hair.idr.id.group_id = new_gzps.id.group_id;
+			new_hair.idr.id.instance_id = new_gzps.id.instance_id;
+			new_hair.idr.id.resource_id = new_gzps.id.resource_id;
+
+			// Remove unnecessary 3IDR properties
+			new_hair.idr.ui_ref = None;
+			new_hair.idr.str_ref = None;
+			new_hair.idr.coll_ref = None;
+			new_hair.idr.gzps_ref = None;
+
+			// copy new GZPS back to outfit
+			new_hair.gzps = new_gzps;
+
+			// add outfit to list
+			new_hairs.push(new_hair);
+		}
+	}
+
+	// add extra hairs
+	new_hairs.extend_from_slice(&extra_hairs.iter().map(|(hair_index, ages)| {
+		let mut new_hair = replacement_hairs[*hair_index].clone();
+		let gzps = &new_hairs[0].gzps;
+
+		// create BINX resource
+		new_hair.gzps.age = ages.clone();
+
+		// copy relevant values from GZPS updated in the last step
+		new_hair.gzps.version = gzps.version;
+		new_hair.gzps.product = gzps.product;
+		new_hair.gzps.creator = gzps.creator.clone();
+		new_hair.gzps.family = gzps.family.clone();
+		new_hair.gzps.flags = gzps.flags;
+		new_hair.gzps.category = gzps.category.clone();
+
+		// add required references to 3IDR
+		new_hair.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
+		new_hair.idr.str_ref = Some(Identifier::new(TypeId::TextList as u32, 0x7F43F357, 0x1, 0));
+		new_hair.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x7F43F357, 0x6CDBC43D, 0));
+		new_hair.idr.gzps_ref = Some(new_hair.gzps.id.clone());
+
+		new_hair.generate_binx();
+
+		new_hair
+	}).collect::<Vec<Outfit>>());
+
+	// pull all resources together
+	let all_resources = new_hairs
+		.iter()
+		.flat_map(|o| o.get_resources())
+		.collect::<Vec<DecodedResource>>();
+
+	// save package file
+	let mut spin = Spinner::new(Spinners::Dots, "Saving and compressing package...".into());
+	match Dbpf::write_package_file(&all_resources, &output_path, true) {
+		Ok(_) => spin.stop_with_message("SUCCESS!".into()),
+		Err(why) => spin.stop_with_message(format!("ERROR: {why}"))
+	}
+
+	Ok(())
+}

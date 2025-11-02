@@ -206,11 +206,11 @@ impl Outfit {
 		resources
 	}
 
-	pub fn generate_binx(&self) -> Binx {
+	pub fn generate_binx(&mut self) {
 		let mut id = self.idr.id.clone();
 		id.type_id = TypeId::Binx;
 		let key = self.gzps.max_resource_key();
-		Binx {
+		self.binx = Some(Binx {
 			id,
 			icon_idx: key + 1,
 			stringset_idx: key + 2,
@@ -219,6 +219,6 @@ impl Outfit {
 			creator_id: PascalString::new("00000000-0000-0000-0000-000000000000"),
 			sort_index: 0,
 			string_index: 1
-		}
+		});
 	}
 }

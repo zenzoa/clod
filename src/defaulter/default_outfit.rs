@@ -1,7 +1,5 @@
 use std::error::Error;
-use std::fs;
 use std::path::PathBuf;
-use std::ffi::OsString;
 
 use cursive::{ Cursive, With };
 use cursive::view::{ Nameable, Scrollable, Resizable };
@@ -12,6 +10,8 @@ use crate::dbpf::resource::DecodedResource;
 use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender, Category };
 use crate::dbpf::resource_types::text_list::TextList;
 use crate::outfit::Outfit;
+
+use super::{ get_default_replacement_files, extract_resources, extract_gzps, default_output_path };
 
 #[derive(Clone, Default)]
 struct SivData {
@@ -24,61 +24,14 @@ struct SivData {
 pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 	let source_dir = source.unwrap_or(PathBuf::from("./"));
 
-	// get original files from source dir, and replacement files from any subfolders
-	let mut original_files = Vec::new();
-	let mut replacement_files = Vec::new();
-	for entry in (fs::read_dir(&source_dir)?).flatten() {
-		let entry_path = entry.path();
-		if entry_path.is_file() && entry_path.extension().unwrap_or(&OsString::new()) == "package" {
-			original_files.push(entry_path);
-		} else if entry_path.is_dir() {
-			for subentry in (fs::read_dir(entry_path)?).flatten() {
-				let subentry_path = subentry.path();
-				if subentry_path.is_file() && subentry_path.extension().unwrap_or(&OsString::new()) == "package" {
-					replacement_files.push(subentry_path);
-				}
-			}
-		}
-	}
-	original_files.sort();
-	replacement_files.sort();
+	let (original_files, replacement_files) = get_default_replacement_files(&source_dir)?;
 
 	// get all GZPS resources in original package(s)
-	let mut gzps_list: Vec<Gzps> = original_files
-		.iter()
-		.map(|path| {
-			let bytes = fs::read(path)?;
-			let dbpf = Dbpf::read(&bytes, "")?;
-			Ok(dbpf.resources
-				.iter()
-				.filter_map(|res|
-					if let DecodedResource::Gzps(gzps) = res {
-						Some(gzps.clone())
-					} else {
-						None
-					})
-				.collect::<Vec<_>>())
-			})
-			.collect::<Result<Vec<Vec<Gzps>>, Box<dyn Error>>>()?
-			.into_iter()
-			.flatten()
-			.collect();
-	gzps_list.sort_by_key(|gzps| gzps.name.to_string());
+	let gzps_list = extract_gzps(&original_files)?;
 	let pairings: Vec<Option<usize>> = gzps_list.iter().map(|_| None).collect();
 
 	// get all resources from replacement package(s)
-	let resources: Vec<DecodedResource> = replacement_files
-		.iter()
-		.map(|replacement| {
-			let bytes = fs::read(replacement)?;
-			let new_name = replacement.file_stem().map_or("UNKNOWN".to_string(), |x| x.to_string_lossy().into_owned());
-			let dbpf = Dbpf::read(&bytes, &new_name)?;
-			Ok(dbpf.resources)
-		})
-		.collect::<Result<Vec<Vec<DecodedResource>>, Box<dyn Error>>>()?
-		.into_iter()
-		.flatten()
-		.collect();
+	let resources = extract_resources(&replacement_files)?;
 
 	// sort replacement resources into outfits
 	let mut outfits = Vec::new();
@@ -89,21 +42,10 @@ pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 		}
 	}
 
-	// set default output path
-	let output_path = if original_files.len() == 1 {
-		original_files[0].with_file_name(if let Some(file_name) = original_files[0].file_name() {
-			file_name.to_string_lossy().replace(".package", "_DEFAULT.package")
-		} else {
-			"DEFAULT.package".to_string()
-		})
-	} else {
-		source_dir.join("DEFAULT.package")
-	};
-
 	let mut siv = cursive::default();
 
 	let data = SivData {
-		output_path,
+		output_path: default_output_path(&original_files, &source_dir),
 		gzps_list,
 		outfits,
 		pairings
@@ -440,7 +382,7 @@ fn save_package(s: &mut Cursive) {
 					}
 
 					// create BINX resource
-					new_outfit.binx = Some(new_outfit.generate_binx());
+					new_outfit.generate_binx();
 
 					// add additional references to 3IDR
 					new_outfit.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
