@@ -39,7 +39,6 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 	let mut gender: Option<Gender> = None;
 	let mut age_color_sets = Vec::new();
 
-	let mut unused_warnings = Vec::new();
 	let mut unreplaced_warnings = Vec::new();
 
 	for (i, gzps) in gzps_list.iter().enumerate() {
@@ -56,9 +55,6 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 						for age in &gzps.age {
 							age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false), gzps.hairtone.stringify()));
 						}
-					} else {
-						let age_color = format!("{}_{}", Age::stringify(&hair.gzps.age, false), hair.gzps.hairtone.stringify());
-						unused_warnings.push(format!("WARNING: unused replacement {} in \"{}\"", age_color, hair.title));
 					}
 			}
 		}
@@ -88,10 +84,6 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		}
 	}
 
-	for warning in unused_warnings {
-		println!("{warning}");
-	}
-
 	for warning in unreplaced_warnings {
 		println!("{warning}");
 	}
@@ -104,6 +96,8 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 			let mut new_hair = replacement_hairs[j].clone();
 
 			// copy over overrides from replacement to original GZPS
+			new_gzps.resource = new_hair.gzps.resource;
+			new_gzps.shape = new_hair.gzps.shape;
 			new_gzps.overrides = new_hair.gzps.overrides.clone();
 
 			// enable for all categories
@@ -169,6 +163,11 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		new_hair.gzps.family = gzps.family.clone();
 		new_hair.gzps.flags = gzps.flags;
 		new_hair.gzps.category = gzps.category.clone();
+		new_hair.gzps.skintone = gzps.skintone.clone();
+		new_hair.gzps.hairtone = gzps.hairtone.clone();
+
+		new_hair.gzps.genetic = Some(0.0);
+		new_hair.gzps.priority = None;
 
 		// add required references to 3IDR
 		new_hair.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
