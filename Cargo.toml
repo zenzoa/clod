@@ -11,4 +11,3 @@ clap = { version = "4.5.47", features = ["derive"] }
 refpack = "5.0.2"
 regex = "1.11"
 crc-any = "2.5"
-spinners = "4.1"

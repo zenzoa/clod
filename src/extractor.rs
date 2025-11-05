@@ -176,8 +176,7 @@ fn get_skin_packages(path: &Path) -> Result<Vec<Dbpf>, Box<dyn Error>> {
 	for dir_entry in dir_entries {
 		let entry_path = dir_entry.path();
 		if entry_path.is_file() && entry_path.extension().is_some_and(|e| e == "package") {
-			let bytes = fs::read(&entry_path)?;
-			let dbpf = Dbpf::read(&bytes, &entry_path.file_stem().unwrap().to_string_lossy())?;
+			let dbpf = Dbpf::read_from_file(&entry_path, &entry_path.file_stem().unwrap().to_string_lossy())?;
 			packages.push(dbpf);
 		}
 	}

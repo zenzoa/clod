@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io::{ Cursor, Read, Write };
 use std::fmt;
 use std::convert::From;
-use std::fs::File;
+use std::fs::{ self, File };
 use std::path::Path;
 
 use binrw::{ BinRead, BinWrite };
@@ -20,14 +20,16 @@ pub mod resource_types;
 #[derive(Clone)]
 pub struct Dbpf {
 	pub header: Header,
-	pub resources: Vec<DecodedResource>
+	pub resources: Vec<DecodedResource>,
+	pub is_compressed: bool
 }
 
 impl Dbpf {
 	pub fn new(resources: Vec<DecodedResource>) -> Result<Self, Box<dyn Error>> {
 		Ok(Self {
 			header: Header::default(),
-			resources
+			resources,
+			is_compressed: false
 		})
 	}
 
@@ -35,7 +37,7 @@ impl Dbpf {
 		let mut cur = Cursor::new(bytes);
 		let header = Header::read(&mut cur)?;
 		cur.set_position(header.index_offset as u64);
-		let index_entries = IndexEntry::read_all(&mut cur, &header)?;
+		let (index_entries, is_compressed) = IndexEntry::read_all(&mut cur, &header)?;
 		let resources = Resource::read_all(&mut cur, &index_entries)?;
 		let decoded_resources = resources
 			.iter()
@@ -44,17 +46,23 @@ impl Dbpf {
 
 		Ok(Dbpf {
 			header,
-			resources: decoded_resources
+			resources: decoded_resources,
+			is_compressed
 		})
 	}
 
-	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, compress: bool) -> Result<(), Box<dyn Error>> {
+	pub fn read_from_file(path: &Path, title: &str) -> Result<Dbpf, Box<dyn Error>> {
+		let bytes = fs::read(path)?;
+		Dbpf::read(&bytes, title)
+	}
+
+	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, compress: Option<bool>) -> Result<(), Box<dyn Error>> {
 		let mut resources = self.resources
 			.iter()
 			.map(|r| -> Result<Resource, Box<dyn Error>> { r.to_resource() })
 			.collect::<Result<Vec<Resource>, Box<dyn Error>>>()?;
 
-		if compress {
+		if compress.is_some_and(|c| c) || self.is_compressed {
 			let mut dir_items = Vec::new();
 			for resource in resources.iter_mut() {
 				let uncompressed_size = resource.data.len() as u32;
@@ -102,17 +110,19 @@ impl Dbpf {
 		self.resources.dedup_by_key(|res| res.get_id().to_string());
 	}
 
+	pub fn write_to_file(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+		let mut cur = Cursor::new(Vec::new());
+		self.write(&mut cur, None)?;
+		let mut new_file = File::create(path)?;
+		new_file.write_all(&cur.into_inner())?;
+		Ok(())
+	}
+
 	pub fn write_package_file(resources: &[DecodedResource], path: &Path, compress: bool) -> Result<(), Box<dyn Error>> {
 		let mut new_dbpf = Dbpf::new(resources.to_vec())?;
 		new_dbpf.clean_up_resources();
-
-		let mut cur = Cursor::new(Vec::new());
-		new_dbpf.write(&mut cur, compress)?;
-
-		let mut new_file = File::create(path)?;
-		new_file.write_all(&cur.into_inner())?;
-
-		Ok(())
+		new_dbpf.is_compressed = compress;
+		new_dbpf.write_to_file(path)
 	}
 }
 

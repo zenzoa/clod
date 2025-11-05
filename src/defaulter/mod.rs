@@ -35,9 +35,8 @@ pub fn extract_resources(files: &[PathBuf]) -> Result<Vec<DecodedResource>, Box<
 	let resources: Vec<DecodedResource> = files
 		.iter()
 		.map(|file| {
-			let bytes = fs::read(file)?;
 			let new_name = file.file_stem().map_or("UNKNOWN".to_string(), |x| x.to_string_lossy().into_owned());
-			let dbpf = Dbpf::read(&bytes, &new_name)?;
+			let dbpf = Dbpf::read_from_file(file, &new_name)?;
 			Ok(dbpf.resources)
 		})
 		.collect::<Result<Vec<Vec<DecodedResource>>, Box<dyn Error>>>()?

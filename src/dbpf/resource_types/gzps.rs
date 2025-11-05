@@ -247,6 +247,32 @@ impl Gzps {
 		Ok(cur.into_inner())
 	}
 
+	pub fn set_property(&mut self, property: &str, value: &str) -> Result<(), Box<dyn Error>> {
+		match property {
+			"version" => self.version = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
+			"product" => self.product = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
+			"age" => self.age = Age::from_flag(value.parse::<u32>()?),
+			"gender" => self.gender = Gender::from_flag(value.parse::<u32>()?),
+			"species" => self.species = value.parse::<u32>()?,
+			"outfit" => self.outfit = Part::from_flag(value.parse::<u32>()?),
+			"parts" => self.parts = Part::from_flag(value.parse::<u32>()?),
+			"flags" => self.flags = value.parse::<u32>()?,
+			"name" => self.name = PascalString::new(value),
+			"creator" => self.creator = PascalString::new(value),
+			"family" => self.family = PascalString::new(value),
+			"genetic" => self.genetic = if value.to_lowercase() == "none" { None } else { Some(value.parse::<f32>()?)},
+			"priority" => self.priority = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
+			"outfit_type" => self.outfit_type = PascalString::new(value),
+			"skintone" => self.skintone = PascalString::new(value),
+			"hairtone" => self.hairtone = HairTone::from_string(value),
+			"category" => self.category = Category::from_flag(value.parse::<u32>()?),
+			"shoe" => self.shoe = Shoe::from_flag(value.parse::<u32>()?),
+			"fitness" => self.fitness = value.parse::<u32>()?,
+			_ => { return Err(format!("No property named '{property}' found in GZPS").into()); }
+		}
+		Ok(())
+	}
+
 	pub fn generate_name(&self) -> String {
 		let gender = Gender::stringify(&self.gender);
 		let part = Part::stringify(&self.parts);
@@ -602,14 +628,7 @@ pub enum HairTone {
 
 impl HairTone {
 	pub fn from_pascal_string(pascal_string: &PascalString) -> Self {
-		match pascal_string.to_string().as_str() {
-			"00000001-0000-0000-0000-000000000000" => Self::Black,
-			"00000002-0000-0000-0000-000000000000" => Self::Brown,
-			"00000003-0000-0000-0000-000000000000" => Self::Blond,
-			"00000004-0000-0000-0000-000000000000" => Self::Red,
-			"00000005-0000-0000-0000-000000000000" => Self::Grey,
-			_ => Self::Other,
-		}
+		Self::from_string(&pascal_string.to_string())
 	}
 
 	pub fn to_pascal_string(self) -> PascalString {
@@ -620,6 +639,17 @@ impl HairTone {
 			Self::Red => PascalString::new("00000004-0000-0000-0000-000000000000"),
 			Self::Grey => PascalString::new("00000005-0000-0000-0000-000000000000"),
 			Self::Other => PascalString::new("00000006-0000-0000-0000-000000000000")
+		}
+	}
+
+	pub fn from_string(string: &str) -> Self {
+		match string {
+			"00000001-0000-0000-0000-000000000000" => Self::Black,
+			"00000002-0000-0000-0000-000000000000" => Self::Brown,
+			"00000003-0000-0000-0000-000000000000" => Self::Blond,
+			"00000004-0000-0000-0000-000000000000" => Self::Red,
+			"00000005-0000-0000-0000-000000000000" => Self::Grey,
+			_ => Self::Other,
 		}
 	}
 

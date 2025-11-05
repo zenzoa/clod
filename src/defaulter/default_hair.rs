@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fs;
+use std::io::{ self, Write };
 use std::path::PathBuf;
-use spinners::{ Spinner, Spinners };
 
 use crate::dbpf::{ Dbpf, PascalString, Identifier, TypeId };
 use crate::dbpf::resource::DecodedResource;
@@ -48,13 +48,12 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		for (j, hair) in replacement_hairs.iter().enumerate() {
 			if gzps.hairtone == hair.gzps.hairtone &&
 				Age::are_compatible(&gzps.age, &hair.gzps.age) &&
-				Gender::are_compatible(&gzps.gender, &hair.gzps.gender, &gzps.age) {
-					if pairings[i].is_none() {
-						println!("Replacing {}", gzps.title);
-						pairings[i] = Some(j);
-						for age in &gzps.age {
-							age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false), gzps.hairtone.stringify()));
-						}
+				Gender::are_compatible(&gzps.gender, &hair.gzps.gender, &gzps.age) &&
+				pairings[i].is_none() {
+					println!("Replacing {}", gzps.title);
+					pairings[i] = Some(j);
+					for age in &gzps.age {
+						age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false), gzps.hairtone.stringify()));
 					}
 			}
 		}
@@ -164,7 +163,7 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		new_hair.gzps.flags = gzps.flags;
 		new_hair.gzps.category = gzps.category.clone();
 		new_hair.gzps.skintone = gzps.skintone.clone();
-		new_hair.gzps.hairtone = gzps.hairtone.clone();
+		new_hair.gzps.hairtone = gzps.hairtone;
 
 		new_hair.gzps.genetic = Some(0.0);
 		new_hair.gzps.priority = None;
@@ -187,11 +186,10 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		.collect::<Vec<DecodedResource>>();
 
 	// save package file
-	let mut spin = Spinner::new(Spinners::Dots, "Saving and compressing package...".into());
-	match Dbpf::write_package_file(&all_resources, &output_path, true) {
-		Ok(_) => spin.stop_with_message("SUCCESS!".into()),
-		Err(why) => spin.stop_with_message(format!("ERROR: {why}"))
-	}
+	print!("Saving and compressing package...");
+	io::stdout().flush()?;
+	Dbpf::write_package_file(&all_resources, &output_path, true)?;
+	println!(" DONE");
 
 	Ok(())
 }

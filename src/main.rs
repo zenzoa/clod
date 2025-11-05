@@ -9,6 +9,7 @@ mod outfit;
 mod defaulter;
 mod extractor;
 mod compressor;
+mod bulk_edit;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -71,6 +72,17 @@ enum Command {
 		#[arg(short, long, value_name="ID")]
 		family: String
 	},
+	/// Bulk edit GZPS properties in package files
+	EditGZPS {
+		// List of package files to edit
+		files: Vec<PathBuf>,
+		/// GZPS property name
+		#[arg(short, long)]
+		property: String,
+		/// New GZPS property value
+		#[arg(short, long)]
+		value: String
+	},
 	/// Compresses resources in package files
 	Compress {
 		/// List of package files to compress
@@ -95,6 +107,9 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		}
 		Some(Command::FindHairs{ input, family }) => {
 			extractor::find_hairs(input, family)
+		}
+		Some(Command::EditGZPS{ files, property, value }) => {
+			bulk_edit::edit_gzps(files, &property, &value)
 		}
 		Some(Command::Compress{ files }) => {
 			compressor::compress_packages(files)
