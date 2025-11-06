@@ -61,6 +61,21 @@ impl Idr {
 		})
 	}
 
+	pub fn new_empty(id: &Identifier) -> Self {
+		let mut id = id.clone();
+		id.type_id = TypeId::Idr;
+		Self {
+			id,
+			cres_ref: None,
+			shpe_ref: None,
+			txmt_refs: Vec::new(),
+			ui_ref: None,
+			str_ref: None,
+			coll_ref: None,
+			gzps_ref: None
+		}
+	}
+
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
 		let mut cur = Cursor::new(Vec::new());
 

@@ -312,7 +312,7 @@ impl SevenBitString {
 	}
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct PascalString(Vec<u8>);
 
 impl fmt::Display for PascalString {

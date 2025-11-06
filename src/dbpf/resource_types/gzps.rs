@@ -273,52 +273,63 @@ impl Gzps {
 		Ok(())
 	}
 
-	pub fn generate_name(&self) -> String {
+	pub fn generate_key(&self) -> String {
+		let age = Age::stringify(&self.age, true);
 		let gender = Gender::stringify(&self.gender);
 		let part = Part::stringify(&self.parts);
 		let full_name = self.name.to_string().to_lowercase().trim().to_string();
 
-		if self.parts.contains(&Part::Hair) {
-			let age = Age::stringify(&self.age, false);
-
-			let mut name_without_prefix = full_name.clone();
-			let re = Regex::new(r"^(?:casie_)?(?:contest_)?y?[bpctyaeu][mfu](?:hair)(.+)").unwrap();
-			for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
-				name_without_prefix = inner.to_string();
-			}
-
-			let hidden = if self.flags & 0x1 == 1 || self.flags & 0x20 & 1 == 1 { "_HIDDEN" } else { "" };
-			format!("{gender}{part}_{name_without_prefix}_{age}{hidden}_{}", &self.family.to_string()[0..8])
-
-		} else {
-			let age = Age::stringify(&self.age, true);
-
-			let mut name_without_prefix = full_name.clone();
-			let re = Regex::new(r"^(?:casie_)?(?:contest_)?[bpctyaeu][mfu](?:body)?(?:bottom)?(?:top)?([a-z,0-9]+)_?").unwrap();
-			for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
-				name_without_prefix = inner.to_string();
-			}
-
-			let mut name_without_ep = name_without_prefix.clone();
-			let re2 = Regex::new(r"([a-z,0-9]+)ep\d$").unwrap();
-			for (_, [inner]) in re2.captures_iter(&name_without_prefix).map(|c| c.extract()) {
-				name_without_ep = inner.to_string();
-			}
-
-			format!("{age}{gender}_{part}_{name_without_ep}")
-		}
-	}
-
-	pub fn generate_hair_folder_name(&self) -> String {
-		let gender = Gender::stringify(&self.gender);
-		let part = Part::stringify(&self.parts);
-		let full_name = self.name.to_string().to_lowercase().trim().to_string();
 		let mut name_without_prefix = full_name.clone();
-		let re = Regex::new(r"^(?:casie_)?(?:contest_)?y?[bpctyaeu][mfu](?:hair)([a-z,0-9]+)_?").unwrap();
+		let re = Regex::new(r"^(?:casie_)?(?:contest_)?[bpctyaeu][mfu](?:body)?(?:bottom)?(?:top)?([a-z,0-9]+)_?").unwrap();
 		for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
 			name_without_prefix = inner.to_string();
 		}
-		format!("{gender}{part}_{name_without_prefix}")
+
+		let mut name_without_ep = name_without_prefix.clone();
+		let re2 = Regex::new(r"([a-z,0-9]+)ep\d$").unwrap();
+		for (_, [inner]) in re2.captures_iter(&name_without_prefix).map(|c| c.extract()) {
+			name_without_ep = inner.to_string();
+		}
+
+		format!("{age}{gender}_{part}_{name_without_ep}")
+	}
+
+	pub fn hair_name(&self) -> String {
+		let age = Age::stringify(&self.age, false);
+		let hairtone = if self.hairtone == HairTone::Other { "".to_string() } else { format!("_{}",self.hairtone.stringify()) };
+		let hidden = if self.flags & 1 > 0 { "_HIDDEN" } else { "" };
+		format!("{}{}{}{}", age, self.hair_group_name(), hairtone, hidden)
+	}
+
+	pub fn hair_group_name(&self) -> String {
+		let full_name = self.name.to_string().to_lowercase().trim().to_string();
+		let mut group_name = full_name.clone();
+		let re = Regex::new(r"^(?:casie_)?y?[bpctyaeu][mfu](?:hair)(.+)").unwrap();
+		for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
+			group_name = inner.to_string();
+		}
+		let num_clones = group_name.matches("_clone").count();
+		group_name = group_name.replace("_clone", "");
+		let hairtone = format!("_{}", self.hairtone.stringify());
+		if group_name.contains("hatballcapup") ||
+			group_name.contains("hatbaker_") ||
+			group_name.contains("hatfronds") ||
+			group_name.contains("hattourguide") ||
+			group_name.contains("hatwitch") ||
+			group_name.contains("hatwitch") ||
+			group_name.contains("masksuperninja") ||
+			group_name.contains("ponypuff") ||
+			group_name.contains("hatbellhop") ||
+			group_name.contains("hatfedoraband") ||
+			group_name.contains("hatpanama") {
+				group_name = group_name.replacen(&hairtone, "", 1);
+		} else {
+			group_name = group_name.rsplitn(2, &hairtone).last().unwrap().to_string();
+		}
+		group_name.push_str(&"_clone".repeat(num_clones));
+		group_name.insert_str(0, "hair_");
+		group_name.insert_str(0, &Gender::stringify(&self.gender));
+		group_name
 	}
 
 	pub fn max_resource_key(&self) -> u32 {

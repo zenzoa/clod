@@ -64,14 +64,6 @@ enum Command {
 		#[arg(short, long, value_name="FOLDER")]
 		output: Option<PathBuf>
 	},
-	/// Finds all hairs with a given family value
-	FindHairs {
-		/// Folder containing Skin.package files
-		input: Option<PathBuf>,
-		/// Family property
-		#[arg(short, long, value_name="ID")]
-		family: String
-	},
 	/// Bulk edit GZPS properties in package files
 	EditGZPS {
 		// List of package files to edit
@@ -100,13 +92,10 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 			defaulter::default_hair::default_hair(source, output, add_ages, all_categories, hide_pack_icon, flags, family)
 		}
 		Some(Command::ExtractOutfits{ input, output }) => {
-			extractor::extract_outfits(input, output)
+			extractor::extract_outfits::extract_outfits(input, output)
 		}
 		Some(Command::ExtractHairs{ input, output }) => {
-			extractor::extract_hairs(input, output)
-		}
-		Some(Command::FindHairs{ input, family }) => {
-			extractor::find_hairs(input, family)
+			extractor::extract_hairs::extract_hairs(input, output)
 		}
 		Some(Command::EditGZPS{ files, property, value }) => {
 			bulk_edit::edit_gzps(files, &property, &value)
