@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::io::Cursor;
-use std::collections::HashMap;
 
 use crate::dbpf::{ Identifier, PascalString };
 use crate::dbpf::resource::Resource;
@@ -31,97 +30,97 @@ impl Xhtn {
 	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let cpf = Cpf::read(&resource.data)?;
 
-		let version = if let Some(PropertyValue::Uint(v)) = cpf.props.get("version") {
+		let version = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("version") {
 			*v
 		} else {
 			6
 		};
 
-		let product = if let Some(PropertyValue::Uint(v)) = cpf.props.get("product") {
+		let product = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("product") {
 			*v
 		} else {
 			0
 		};
 
-		let age = if let Some(PropertyValue::Uint(v)) = cpf.props.get("age") {
+		let age = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("age") {
 			*v
 		} else {
 			0
 		};
 
-		let gender = if let Some(PropertyValue::Uint(v)) = cpf.props.get("gender") {
+		let gender = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("gender") {
 			*v
 		} else {
 			0
 		};
 
-		let species = if let Some(PropertyValue::Uint(v)) = cpf.props.get("species") {
+		let species = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("species") {
 			*v
 		} else {
 			1
 		};
 
-		let parts = if let Some(PropertyValue::Uint(v)) = cpf.props.get("parts") {
+		let parts = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("parts") {
 			*v
 		} else {
 			0
 		};
 
-		let outfit = if let Some(PropertyValue::Uint(v)) = cpf.props.get("outfit") {
+		let outfit = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("outfit") {
 			*v
 		} else {
 			0
 		};
 
-		let flags = if let Some(PropertyValue::Uint(v)) = cpf.props.get("flags") {
+		let flags = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("flags") {
 			*v
 		} else {
 			0
 		};
 
-		let name = if let Some(PropertyValue::String(v)) = cpf.props.get("name") {
+		let name = if let Some(PropertyValue::String(v)) = cpf.get_prop("name") {
 			v.clone()
 		} else {
 			PascalString::new("Black")
 		};
 
-		let creator = if let Some(PropertyValue::String(v)) = cpf.props.get("creator") {
+		let creator = if let Some(PropertyValue::String(v)) = cpf.get_prop("creator") {
 			v.clone()
 		} else {
 			PascalString::new("00000000-0000-0000-0000-000000000000")
 		};
 
-		let family = if let Some(PropertyValue::String(v)) = cpf.props.get("family") {
+		let family = if let Some(PropertyValue::String(v)) = cpf.get_prop("family") {
 			v.clone()
 		} else {
 			PascalString::new("00000000-0000-0000-0000-000000000000")
 		};
 
-		let genetic = if let Some(PropertyValue::Float(v)) = cpf.props.get("genetic") {
+		let genetic = if let Some(PropertyValue::Float(v)) = cpf.get_prop("genetic") {
 			*v
 		} else {
 			1.0
 		};
 
-		let priority = if let Some(PropertyValue::Int(v)) = cpf.props.get("priority") {
+		let priority = if let Some(PropertyValue::Int(v)) = cpf.get_prop("priority") {
 			*v
 		} else {
 			0
 		};
 
-		let xhtn_type = if let Some(PropertyValue::String(v)) = cpf.props.get("type") {
+		let xhtn_type = if let Some(PropertyValue::String(v)) = cpf.get_prop("type") {
 			v.clone()
 		} else {
 			PascalString::new("hairtone")
 		};
 
-		let preview = if let Some(PropertyValue::String(v)) = cpf.props.get("preview") {
+		let preview = if let Some(PropertyValue::String(v)) = cpf.get_prop("preview") {
 			v.clone()
 		} else {
 			PascalString::new("")
 		};
 
-		let proxy = if let Some(PropertyValue::String(v)) = cpf.props.get("proxy") {
+		let proxy = if let Some(PropertyValue::String(v)) = cpf.get_prop("proxy") {
 			v.clone()
 		} else {
 			PascalString::new("00000001-0000-0000-0000-000000000000")
@@ -154,7 +153,7 @@ impl Xhtn {
 		let cpf = Cpf {
 			cpf_type: CpfType::Normal,
 			version: Some(0),
-			props: HashMap::<String, PropertyValue>::from([
+			props: vec![
 				("version".to_string(), PropertyValue::Uint(self.version)),
 				("product".to_string(), PropertyValue::Uint(self.product)),
 				("age".to_string(), PropertyValue::Uint(self.age)),
@@ -171,7 +170,7 @@ impl Xhtn {
 				("type".to_string(), PropertyValue::String(self.xhtn_type.clone())),
 				("preview".to_string(), PropertyValue::String(self.preview.clone())),
 				("proxy".to_string(), PropertyValue::String(self.proxy.clone())),
-			])
+			]
 		};
 
 		cpf.write(&mut cur)?;

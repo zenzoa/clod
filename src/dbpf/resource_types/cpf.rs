@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::io::Cursor;
 use std::fmt;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
@@ -23,7 +22,7 @@ pub enum CpfType {
 pub struct Cpf {
 	pub cpf_type: CpfType,
 	pub version: Option<u16>,
-	pub props: HashMap<String, PropertyValue>
+	pub props: Vec<(String, PropertyValue)>
 }
 
 impl Cpf {
@@ -43,7 +42,7 @@ impl Cpf {
 
 		let num_props = u32::read_le(cur)?;
 
-		let mut props = HashMap::new();
+		let mut props = Vec::new();
 		for _ in 0..num_props {
 			let prop_type = u32::read_le(cur)?;
 			let prop_name = PascalString::read::<u32>(cur)?.to_string();
@@ -55,7 +54,7 @@ impl Cpf {
 				Ok(DataType::String) => PropertyValue::String(PascalString::read::<u32>(cur)?),
 				_ => return Err("Invalid CPF property type.".into())
 			};
-			props.insert(prop_name, prop_value);
+			props.push((prop_name, prop_value));
 		}
 
 		Ok(Self {
@@ -85,7 +84,7 @@ impl Cpf {
 			_ => return Err("Invalid CPF XML root tag.".into()),
 		};
 
-		let mut props = HashMap::new();
+		let mut props = Vec::new();
 		for child in xml.children {
 			if let XMLNode::Element(el) = child {
 				let prop_name = match el.attributes.get("key") {
@@ -139,7 +138,7 @@ impl Cpf {
 					)
 				};
 
-				props.insert(prop_name, prop_value);
+				props.push((prop_name, prop_value));
 			}
 		}
 
@@ -236,6 +235,15 @@ impl Cpf {
 		root_el.write(writer)?;
 
 		Ok(())
+	}
+
+	pub fn get_prop(&self, key: &str) -> Option<&PropertyValue> {
+		for prop in &self.props {
+			if prop.0 == key {
+				return Some(&prop.1);
+			}
+		}
+		return None
 	}
 }
 

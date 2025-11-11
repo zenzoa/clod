@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::io::Cursor;
-use std::collections::HashMap;
 
 use regex::Regex;
 
@@ -53,37 +52,37 @@ impl Gzps {
 			..Self::default()
 		};
 
-		gzps.version = match cpf.props.get("version") {
+		gzps.version = match cpf.get_prop("version") {
 			Some(PropertyValue::Uint(val)) => Some(*val),
 			_ => None
 		};
 
-		gzps.product = match cpf.props.get("product") {
+		gzps.product = match cpf.get_prop("product") {
 			Some(PropertyValue::Uint(val)) => Some(*val),
 			_ => None
 		};
 
-		gzps.age = match cpf.props.get("age") {
+		gzps.age = match cpf.get_prop("age") {
 			Some(PropertyValue::Uint(val)) => Age::from_flag(*val),
 			_ => return Err("GZPS is missing \"age\" property.".into())
 		};
 
-		gzps.gender = match cpf.props.get("gender") {
+		gzps.gender = match cpf.get_prop("gender") {
 			Some(PropertyValue::Uint(val)) => Gender::from_flag(*val),
 			_ => return Err("GZPS is missing \"gender\" property.".into())
 		};
 
-		gzps.species = match cpf.props.get("species") {
+		gzps.species = match cpf.get_prop("species") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"species\" property.".into())
 		};
 
-		let outfit_prop = match cpf.props.get("outfit") {
+		let outfit_prop = match cpf.get_prop("outfit") {
 			Some(PropertyValue::Uint(val)) => Some(*val),
 			_ => None
 		};
 
-		let parts_prop = match cpf.props.get("parts") {
+		let parts_prop = match cpf.get_prop("parts") {
 			Some(PropertyValue::Uint(val)) => Some(*val),
 			_ => None
 		};
@@ -95,91 +94,91 @@ impl Gzps {
 			(None, None) => return Err("GZPS is missing both \"outfit\" and \"parts\" properties.".into())
 		};
 
-		gzps.flags = match cpf.props.get("flags") {
+		gzps.flags = match cpf.get_prop("flags") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"flags\" property.".into())
 		};
 
-		gzps.name = match cpf.props.get("name") {
+		gzps.name = match cpf.get_prop("name") {
 			Some(PropertyValue::String(val)) => val.clone(),
 			_ => return Err("GZPS is missing \"name\" property.".into())
 		};
 
-		gzps.creator = match cpf.props.get("creator") {
+		gzps.creator = match cpf.get_prop("creator") {
 			Some(PropertyValue::String(val)) => val.clone(),
 			_ => return Err("GZPS is missing \"creator\" property.".into())
 		};
 
-		gzps.family = match cpf.props.get("family") {
+		gzps.family = match cpf.get_prop("family") {
 			Some(PropertyValue::String(val)) => val.clone(),
 			_ => return Err("GZPS is missing \"family\" property.".into())
 		};
 
-		gzps.genetic = match cpf.props.get("genetic") {
+		gzps.genetic = match cpf.get_prop("genetic") {
 			Some(PropertyValue::Float(val)) => Some(*val),
 			_ => None
 		};
 
-		gzps.priority = match cpf.props.get("priority") {
+		gzps.priority = match cpf.get_prop("priority") {
 			Some(PropertyValue::Uint(val)) => Some(*val),
 			_ => None
 		};
 
-		gzps.outfit_type = match cpf.props.get("type") {
+		gzps.outfit_type = match cpf.get_prop("type") {
 			Some(PropertyValue::String(val)) => val.clone(),
 			_ => return Err("GZPS is missing \"type\" property.".into())
 		};
 
-		gzps.skintone = match cpf.props.get("skintone") {
+		gzps.skintone = match cpf.get_prop("skintone") {
 			Some(PropertyValue::String(val)) => val.clone(),
 			_ => return Err("GZPS is missing \"skintone\" property.".into())
 		};
 
-		gzps.hairtone = match cpf.props.get("hairtone") {
+		gzps.hairtone = match cpf.get_prop("hairtone") {
 			Some(PropertyValue::String(val)) => HairTone::from_pascal_string(val),
 			_ => return Err("GZPS is missing \"hairtone\" property.".into())
 		};
 
-		gzps.category = match cpf.props.get("category") {
+		gzps.category = match cpf.get_prop("category") {
 			Some(PropertyValue::Uint(val)) => Category::from_flag(*val),
 			_ => return Err("GZPS is missing \"category\" property.".into())
 		};
 
-		gzps.shoe = match cpf.props.get("shoe") {
+		gzps.shoe = match cpf.get_prop("shoe") {
 			Some(PropertyValue::Uint(val)) => Shoe::from_flag(*val),
 			_ => return Err("GZPS is missing \"shoe\" property.".into())
 		};
 
-		gzps.fitness = match cpf.props.get("fitness") {
+		gzps.fitness = match cpf.get_prop("fitness") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"fitness\" property.".into())
 		};
 
-		gzps.shape = match cpf.props.get("shapekeyidx") {
+		gzps.shape = match cpf.get_prop("shapekeyidx") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"shapekeyidx\" property.".into())
 		};
 
-		gzps.resource = match cpf.props.get("resourcekeyidx") {
+		gzps.resource = match cpf.get_prop("resourcekeyidx") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"resourcekeyidx\" property.".into())
 		};
 
-		let num_overrides = match cpf.props.get("numoverrides") {
+		let num_overrides = match cpf.get_prop("numoverrides") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"numoverrides\" property.".into())
 		};
 
 		for i in 0..num_overrides {
-			let shape = match cpf.props.get(&format!("override{i}shape")) {
+			let shape = match cpf.get_prop(&format!("override{i}shape")) {
 				Some(PropertyValue::Uint(val)) => *val,
 				_ => return Err(format!("GZPS is missing \"override{i}shape\" property.").into())
 			};
-			let subset = match cpf.props.get(&format!("override{i}subset")) {
+			let subset = match cpf.get_prop(&format!("override{i}subset")) {
 				Some(PropertyValue::String(val)) => val.clone(),
 				_ => return Err(format!("GZPS is missing \"override{i}subset\" property.").into())
 			};
-			let resource = match cpf.props.get(&format!("override{i}resourcekeyidx")) {
+			let resource = match cpf.get_prop(&format!("override{i}resourcekeyidx")) {
 				Some(PropertyValue::Uint(val)) => *val,
 				_ => return Err(format!("GZPS is missing \"override{i}resourcekeyidx\" property.").into())
 			};
@@ -198,43 +197,43 @@ impl Gzps {
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
 		let mut cur = Cursor::new(Vec::new());
 
-		let mut props: HashMap<String, PropertyValue> = HashMap::new();
+		let mut props = Vec::new();
 
 		if let Some(version) = self.version {
-			props.insert("version".to_string(), PropertyValue::Uint(version));
+			props.push(("version".to_string(), PropertyValue::Uint(version)));
 		}
 		if let Some(product) = self.product {
-			props.insert("product".to_string(), PropertyValue::Uint(product));
+			props.push(("product".to_string(), PropertyValue::Uint(product)));
 		}
-		props.insert("age".to_string(), PropertyValue::Uint(Age::to_flag(&self.age)));
-		props.insert("gender".to_string(), PropertyValue::Uint(Gender::to_flag(&self.gender)));
-		props.insert("species".to_string(), PropertyValue::Uint(self.species));
-		props.insert("outfit".to_string(), PropertyValue::Uint(Part::to_flag(&self.outfit)));
-		props.insert("parts".to_string(), PropertyValue::Uint(Part::to_flag(&self.parts)));
-		props.insert("flags".to_string(), PropertyValue::Uint(self.flags));
-		props.insert("name".to_string(), PropertyValue::String(self.name.clone()));
-		props.insert("creator".to_string(), PropertyValue::String(self.creator.clone()));
-		props.insert("family".to_string(), PropertyValue::String(self.family.clone()));
+		props.push(("age".to_string(), PropertyValue::Uint(Age::to_flag(&self.age))));
+		props.push(("gender".to_string(), PropertyValue::Uint(Gender::to_flag(&self.gender))));
+		props.push(("species".to_string(), PropertyValue::Uint(self.species)));
+		props.push(("outfit".to_string(), PropertyValue::Uint(Part::to_flag(&self.outfit))));
+		props.push(("parts".to_string(), PropertyValue::Uint(Part::to_flag(&self.parts))));
+		props.push(("flags".to_string(), PropertyValue::Uint(self.flags)));
+		props.push(("name".to_string(), PropertyValue::String(self.name.clone())));
+		props.push(("creator".to_string(), PropertyValue::String(self.creator.clone())));
+		props.push(("family".to_string(), PropertyValue::String(self.family.clone())));
 		if let Some(genetic) = self.genetic {
-			props.insert("genetic".to_string(), PropertyValue::Float(genetic));
+			props.push(("genetic".to_string(), PropertyValue::Float(genetic)));
 		}
 		if let Some(priority) = self.priority {
-			props.insert("priority".to_string(), PropertyValue::Uint(priority));
+			props.push(("priority".to_string(), PropertyValue::Uint(priority)));
 		}
-		props.insert("type".to_string(), PropertyValue::String(self.outfit_type.clone()));
-		props.insert("skintone".to_string(), PropertyValue::String(self.skintone.clone()));
-		props.insert("hairtone".to_string(), PropertyValue::String(self.hairtone.to_pascal_string()));
-		props.insert("category".to_string(), PropertyValue::Uint(Category::to_flag(&self.category)));
-		props.insert("shoe".to_string(), PropertyValue::Uint(self.shoe as u32));
-		props.insert("fitness".to_string(), PropertyValue::Uint(self.fitness));
-		props.insert("resourcekeyidx".to_string(), PropertyValue::Uint(self.resource));
-		props.insert("shapekeyidx".to_string(), PropertyValue::Uint(self.shape));
+		props.push(("type".to_string(), PropertyValue::String(self.outfit_type.clone())));
+		props.push(("skintone".to_string(), PropertyValue::String(self.skintone.clone())));
+		props.push(("hairtone".to_string(), PropertyValue::String(self.hairtone.to_pascal_string())));
+		props.push(("category".to_string(), PropertyValue::Uint(Category::to_flag(&self.category))));
+		props.push(("shoe".to_string(), PropertyValue::Uint(self.shoe as u32)));
+		props.push(("fitness".to_string(), PropertyValue::Uint(self.fitness)));
+		props.push(("resourcekeyidx".to_string(), PropertyValue::Uint(self.resource)));
+		props.push(("shapekeyidx".to_string(), PropertyValue::Uint(self.shape)));
 
-		props.insert("numoverrides".to_string(), PropertyValue::Uint(self.overrides.len() as u32));
+		props.push(("numoverrides".to_string(), PropertyValue::Uint(self.overrides.len() as u32)));
 		for (i, outfit_override) in self.overrides.iter().enumerate() {
-			props.insert(format!("override{i}shape"), PropertyValue::Uint(outfit_override.shape));
-			props.insert(format!("override{i}subset"), PropertyValue::String(outfit_override.subset.clone()));
-			props.insert(format!("override{i}resourcekeyidx"), PropertyValue::Uint(outfit_override.resource));
+			props.push((format!("override{i}shape"), PropertyValue::Uint(outfit_override.shape)));
+			props.push((format!("override{i}subset"), PropertyValue::String(outfit_override.subset.clone())));
+			props.push((format!("override{i}resourcekeyidx"), PropertyValue::Uint(outfit_override.resource)));
 		}
 
 		let cpf = Cpf {
@@ -302,7 +301,7 @@ impl Gzps {
 	}
 
 	pub fn hair_group_name(&self) -> String {
-		let full_name = self.name.to_string().to_lowercase().trim().to_string();
+		let full_name = self.name.to_string().to_lowercase().trim().replace(" ", "");
 		let mut group_name = full_name.clone();
 		let re = Regex::new(r"^(?:casie_)?y?[bpctyaeu][mfu](?:hair)(.+)").unwrap();
 		for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
@@ -311,7 +310,10 @@ impl Gzps {
 		let num_clones = group_name.matches("_clone").count();
 		group_name = group_name.replace("_clone", "");
 		let hairtone = format!("_{}", self.hairtone.stringify());
-		if group_name.contains("hatballcapup") ||
+		if group_name.contains("santacap") ||
+			group_name.contains("mrsclaus") {
+				group_name = group_name.replacen(&self.hairtone.stringify(), "", 1);
+		} else if group_name.contains("hatballcapup") ||
 			group_name.contains("hatbaker_") ||
 			group_name.contains("hatfronds") ||
 			group_name.contains("hattourguide") ||
