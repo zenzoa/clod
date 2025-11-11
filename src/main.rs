@@ -38,12 +38,18 @@ enum Command {
 		/// Enable for all categories
 		#[arg(short = 'c', long)]
 		all_categories: bool,
-		/// Set flags property to new value
+		/// Set whether hair is visible in CAS
 		#[arg(short, long)]
-		flags: Option<u32>,
-		/// Set family property to new value
-		#[arg(short = 'F', long)]
-		family: Option<String>,
+		visible: Option<bool>,
+		/// Set whether townies can use hair
+		#[arg(short, long)]
+		townified: Option<bool>,
+		/// Set whether hair is a hat
+		#[arg(short = 'H', long)]
+		hat: Option<bool>,
+		/// Use first family value for all hairs
+		#[arg(short = 'f', long)]
+		same_family: bool,
 		/// Hide pack icon
 		#[arg(short = 'p', long)]
 		hide_pack_icon: bool
@@ -88,8 +94,8 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		Some(Command::DefaultOutfit{ source }) => {
 			defaulter::default_outfit::default_outfit(source)
 		}
-		Some(Command::DefaultHair{ source, output, add_ages, all_categories, hide_pack_icon, flags, family }) => {
-			defaulter::default_hair::default_hair(source, output, add_ages, all_categories, hide_pack_icon, flags, family)
+		Some(Command::DefaultHair{ source, output, add_ages, all_categories, visible, townified, hat, hide_pack_icon, same_family }) => {
+			defaulter::default_hair::default_hair(source, output, add_ages, all_categories, visible, townified, hat, hide_pack_icon, same_family)
 		}
 		Some(Command::ExtractOutfits{ input, output }) => {
 			extractor::extract_outfits::extract_outfits(input, output)

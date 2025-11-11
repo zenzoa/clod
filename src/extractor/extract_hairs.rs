@@ -37,29 +37,33 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 
 		let mut hat_ages = Vec::new();
 		for hair in hairs.iter() {
-			for age in &hair.gzps.age {
-				if !hat_ages.contains(&age) {
-					hat_ages.push(age);
+			if hair.gzps.flags & 2 > 0 {
+				for age in &hair.gzps.age {
+					if !hat_ages.contains(&age) {
+						hat_ages.push(age);
+					}
 				}
 			}
 		}
 
-		let is_special_color = hairs.iter().find(|h| h.gzps.hairtone == HairTone::Other).is_some();
+		let is_special_color = hairs
+			.iter()
+			.find(|h| h.gzps.hairtone == HairTone::Other && !h.gzps.name.to_string().contains("bald_bare"))
+			.is_some();
 
 		let group_name = lookup_group(family);
-		// if !group_name.contains("thaicrown") {
-		// 	continue;
-		// }
 
 		let folder_path = create_folder(&output_path, &group_name)?;
+
 		for hair in hairs.iter() {
+			let hair_name = hair.gzps.hair_name();
 
 			let duplicates_combined_age = adult_youngadult_combined &&
 				(hair.gzps.age.contains(&Age::Adult) || hair.gzps.age.contains(&Age::YoungAdult)) &&
 				(hair.gzps.age.len() == 1);
 
 			let mut duplicates_hat_age = false;
-			if is_hat && hair.gzps.flags & 2 == 0 {
+			if is_hat && hair.gzps.flags & 2 == 0 && !hair_name.contains("santacap") {
 				for age in &hair.gzps.age {
 					if hat_ages.contains(&age) {
 						duplicates_hat_age = true;
@@ -67,23 +71,22 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 					}
 				}
 			}
+			if hair_name.contains("_nohat_") {
+				duplicates_hat_age = true;
+			}
 
-			let nonspecial_color = is_special_color && hair.gzps.hairtone != HairTone::Other;
+			let wrong_color = (is_special_color && hair.gzps.hairtone != HairTone::Other) ||
+				(!is_special_color && hair.gzps.hairtone == HairTone::Other);
 
-			let extension = if duplicates_combined_age || duplicates_hat_age || nonspecial_color {
+			let extension = if duplicates_combined_age || duplicates_hat_age || wrong_color {
 				".package.off"
 			} else {
 				".package"
 			};
-			let file_name = format!("{}{}", hair.gzps.hair_name(), extension);
+			let file_name = format!("{}{}", hair_name, extension);
 
-			let hair_name = hair.gzps.hair_name();
 			let file_path = if group_name.starts_with("fhair_hatmascotknight") && hair_name.contains("mhair_pompodore") {
 				let alt_folder = create_folder(&output_path, &group_name.replace("fhair", "mhair"))?;
-				alt_folder.join(file_name)
-
-			} else if hair_name.contains("fhair_veilcurlsup") {
-				let alt_folder = create_folder(&output_path, "fhair_veilcurlsup")?;
 				alt_folder.join(file_name)
 
 			} else if hair_name.contains("fhair_hatballcapnpc_fastfood") {
@@ -129,7 +132,7 @@ fn get_hairs(input_path: &Path) -> Result<HashMap<String, Hair>, Box<dyn Error>>
 			if let DecodedResource::Gzps(gzps) = resource {
 				for resource2 in &package.resources {
 					if let DecodedResource::Idr(idr) = resource2 {
-						let key = format!("{}_{}", gzps.name, &gzps.family);
+						let key = format!("{}_{}_{}", gzps.name, gzps.hairtone.stringify(), &gzps.family);
 						if idr.id.group_id == gzps.id.group_id &&
 							idr.id.instance_id == gzps.id.instance_id &&
 							idr.id.resource_id == gzps.id.resource_id &&
@@ -140,11 +143,20 @@ fn get_hairs(input_path: &Path) -> Result<HashMap<String, Hair>, Box<dyn Error>>
 									gzps: gzps.clone(),
 									idr: idr.clone()
 								});
-						} else if gzps.name.to_string().contains("fhairhatthaicrown") {
-							hairs.insert(key, Hair {
-								gzps: gzps.clone(),
-								idr: Idr::new_empty(&gzps.id)
-							});
+						} else if gzps.family.to_string() == "1495c099-a890-4034-9836-e9eda8a670e7" ||	// thaicrown
+							gzps.family.to_string() == "272bb93f-a544-41ad-8b0e-b6324fe45e5b" ||		// fhair_hatelf_blue
+							gzps.family.to_string() == "edbe8b98-4596-4781-9c47-359e2fa423e2" ||		// fhair_hatelf_green
+							gzps.family.to_string() == "2c0f600b-4726-4171-934b-eb503803054d" ||		// fhair_hatelf_red
+							gzps.family.to_string() == "1a0bf841-f8ad-44ea-a99b-5ffcce8825f8" ||		// mhair_hatelf_blue
+							gzps.family.to_string() == "1135fd5b-b4b7-42b7-b44c-acfc27949aba" ||		// mhair_hatelf_green
+							gzps.family.to_string() == "0c1d74a6-60d4-42a5-baa2-df3b723c9cdd" ||		// mhair_hatelf_red
+							gzps.family.to_string() == "173aa801-b774-4376-9399-637d0dfb14d8" ||		// mrs claus
+							gzps.family.to_string() == "b89bd3d2-0da0-482a-a521-7af57882cc85" ||		// santa cap
+							gzps.family.to_string() == "d44a2ae5-e662-4c2f-b79a-747de4488d9c" {			// santa cap white
+								hairs.insert(key, Hair {
+									gzps: gzps.clone(),
+									idr: Idr::new_empty(&gzps.id)
+								});
 						}
 					}
 				}
@@ -175,9 +187,7 @@ fn lookup_group(family: &str) -> String {
 		"f4ac9685-8171-4631-8e22-5d95abe7eedb" => "fhair_barrett_greyclip",
 		"1d3b6234-b4b4-4354-89c3-a8f93844a2a4" => "fhair_barrett_redclip",
 		"76a76737-63fb-40ca-ac31-ffa5d2c3cdf4" => "fhair_barrette+mob",
-		"23849b4b-db3b-44c8-9083-56eacb4770a5" => "fhair_bun+pu_bald_bare",
-		"7400178f-e511-4a9e-a3b0-a9ad68cd90d1" => "fhair_bun+pu_bald_bare_HIDDEN_7400178f",
-		"530792a6-6090-4089-9f8d-335daa6e6aa0" => "fhair_bun+pu_bald_bare_HIDDEN_530792a6",
+		"23849b4b-db3b-44c8-9083-56eacb4770a5" => "fhair_bun+bare",
 		"75ed0332-cabc-4643-9469-ee63a9a826c1" => "fhair_earmuffs_black",
 		"7930be3c-af8d-4e37-ba83-f3af0899d422" => "fhair_earmuffs_blue",
 		"4e3c936a-bf89-4ccc-976e-87c9ec7a944d" => "fhair_earmuffs_brown",
@@ -187,7 +197,6 @@ fn lookup_group(family: &str) -> String {
 		"9ff7e1af-0bf1-4b3d-87c5-dbe82393f957" => "fhair_bowltwist+formal",
 		"8500e751-fb01-413c-8d34-278603db3e24" => "fhair_braids",
 		"da5ffe4f-8868-4a4c-958d-64602cea5ed3" => "fhair_braidsup",
-		"c30d5c96-db3b-4c8f-bb97-0c02e01f78b3" => "fhair_bun",
 		"541f620a-507d-41bf-8f3c-a43e104934ed" => "fhair_cornrowslong",
 		"660198ec-66a5-4a49-828f-6fd08405f920" => "fhair_crown",
 		"40d0c022-aa29-45a1-9205-e0a25810981e" => "fhair_curlsup",
@@ -225,7 +234,7 @@ fn lookup_group(family: &str) -> String {
 		"90e1a6b2-8450-4a89-b2d9-a0283dce6419" => "fhair_feather",
 		"81a5162d-4464-449b-98ac-02a8cf73480b" => "fhair_flamencoflower",
 		"34e04525-b336-45c7-ba88-d4ce6453d7e5" => "fhair_flowers",
-		"edc45966-1e01-45f4-9319-88d1aee136a0" => "fhair_flypigtails+pfhair_bald_swirl",
+		"edc45966-1e01-45f4-9319-88d1aee136a0" => "fhair_flypigtails+swirl",
 		"b3d610a2-e3a5-4f37-a34f-f3615450b99e" => "fhair_frenchbraid",
 		"771bb139-ecf6-4f0a-9692-f320885c697f" => "fhair_fuzzylongcp",
 		"823f0c51-3a25-4a60-bfd1-014eea6842a6" => "fhair_getfabulous",
@@ -237,7 +246,7 @@ fn lookup_group(family: &str) -> String {
 		"f8730eeb-7ff7-4dd2-a49b-3774d1051271" => "fhair_gwenupdo",
 		"0acee78a-79e8-4599-8579-2e30036f18a7" => "fhair_gypsy",
 		"b2c60bd4-c449-40df-8151-fe0ea0324a40" => "fhair_gypsy_ep7",
-		"fbb536cd-2421-44e6-bd64-c95c27b66a9b" => "fhair_barrette+halo",
+		"fbb536cd-2421-44e6-bd64-c95c27b66a9b" => "fhair_halo",
 		"aab7ba8c-c200-4a5e-9ab4-fe83689fee4c" => "fhair_hatangora_dkgray",
 		"14316981-0a66-4b04-9b7d-c915faa8bfc9" => "fhair_hatangora_lbrown",
 		"bbc59fa1-e876-4a0a-a38f-c549a19edc3f" => "fhair_hatangora_pink",
@@ -245,9 +254,9 @@ fn lookup_group(family: &str) -> String {
 		"b9a9b843-dc99-4a0c-938e-1391e97e384d" => "fhair_hatanimalcap_brown",
 		"d13343eb-4415-4ff4-8fe0-372497c677f5" => "fhair_hatanimalcap_green",
 		"2da22ff1-c030-4738-aba7-845ebc2cfc47" => "fhair_hatanimalcap_grey",
-		"b202ed17-91a8-4c2b-92dd-762075889305" => "fhair_hataviator_capblack",
-		"24c94d96-293b-4087-911e-4345066448da" => "fhair_hataviator_capbrown",
-		"0d0baf94-6ec8-4dc4-8dbd-e50de39360eb" => "fhair_hataviator_capred",
+		"b202ed17-91a8-4c2b-92dd-762075889305" => "fhair_hataviator_black",
+		"24c94d96-293b-4087-911e-4345066448da" => "fhair_hataviator_brown",
+		"0d0baf94-6ec8-4dc4-8dbd-e50de39360eb" => "fhair_hataviator_red",
 		"9f5d7d99-aded-4155-8606-95cc85f47e33" => "fhair_hatbadger_badger",
 		"e284c917-a826-4294-a357-9cdbbcf55c7a" => "fhair_hatbadger_brown",
 		"675043cf-734f-406f-86b6-233920928b16" => "fhair_hatbadger_panda",
@@ -256,8 +265,8 @@ fn lookup_group(family: &str) -> String {
 		"ab2b1c52-796c-436d-a09f-d2860b98498e" => "fhair_hatbaker_checker",
 		"de9661c0-835c-4350-81aa-61e2a3dfae65" => "fhair_hatbaker_checker_ep7",
 		"5a38ee8f-a105-4e2d-a7a2-9dc8c0c25079" => "fhair_hatbaker_white_ep6",
-		"a143073b-c865-453e-80e3-160089530462" => "fhair_hatbaker_teen_a143073b",
-		"55c8e819-b039-4ac6-8590-821dfae6f522" => "fhair_hatbaker_teen_55c8e819",
+		"a143073b-c865-453e-80e3-160089530462" => "fhair_hatbaker_checker",
+		"55c8e819-b039-4ac6-8590-821dfae6f522" => "fhair_hatbaker_white",
 		"781ca87b-05ca-40c0-8cf0-3bb7d5ca3fcd" => "fhair_hatbakerboy_blackleatherhat",
 		"6635000c-fddc-40c1-b943-87de100de9d3" => "fhair_hatbakerboy_plaidhat",
 		"5c04a3fb-21d3-4241-92fa-294abd2f097b" => "fhair_hatbakerboy_tanhat",
@@ -267,7 +276,7 @@ fn lookup_group(family: &str) -> String {
 		"044d6b1d-6e49-44dd-a1bb-f67e228abca5" => "fhair_hatballcapup_black",
 		"a8b89d1d-e22a-431a-abb8-a63a7e82f7b9" => "fhair_hatballcapnpc_maildelivery",
 		"d2c088f8-393e-46c0-9f8c-86933982949c" => "fhair_hatballcapnpc_paperdelivery",
-		"f9b73af1-61e0-4a3c-a77e-787fdc99fcf1" => "fhair_hatballcapup_ep7_ultramarine",
+		"f9b73af1-61e0-4a3c-a77e-787fdc99fcf1" => "fhair_hatballcapup_ep7",
 		"35f88b52-cc04-4ff1-9216-1eb3c16568f4" => "fhair_hatballcapup_llama",
 		"9d3935c0-f1e0-4d25-997d-78a7b438f6b6" => "fhair_hatballcapup_meshblue",
 		"6a86acc5-d110-4bc5-a5f9-427885d00a5a" => "fhair_hatballcapup_meshgreyblack",
@@ -292,12 +301,15 @@ fn lookup_group(family: &str) -> String {
 		"a67d7ed5-6d0c-4d17-b3cf-c9c398cffd69" => "fhair_hatclassicstrawup_blackribbon",
 		"3f949a46-a857-466b-be79-685152932180" => "fhair_hatclassicstrawup_redribbon",
 		"8d48c5aa-9400-47d4-9402-a5073f1cd670" => "fhair_hatclown",
-		"9d86d325-d7ff-47b1-a5a0-380c763d8633" => "fhair_hatcowboydome_straight",
+		"9d86d325-d7ff-47b1-a5a0-380c763d8633" => "fhair_hatcowboydome",
 		"d70bfaa8-fadd-4095-99ed-35aa90740be4" => "fhair_hatcowboyupdome_gardner",
 		"dab09d6e-54d1-4125-99a7-dd6d33d38450" => "fhair_hatcowboyupdome_whiteband",
-		"53de5dd9-4d8a-424b-add3-fab3931f1ba2" => "fhair_hatcowboyupflat_blackband",
+		"53de5dd9-4d8a-424b-add3-fab3931f1ba2" => "fhair_hatcowboyupflat",
 		"fc68a680-61a5-4223-8169-7e354d0226cb" => "fhair_hatcrownprincess",
 		"2cc8b8d9-e0f0-4a2f-a974-fec3dce0732d" => "fhair_hatcrumplebottom",
+		"272bb93f-a544-41ad-8b0e-b6324fe45e5b" => "fhair_hatelf_blue",
+		"edbe8b98-4596-4781-9c47-359e2fa423e2" => "fhair_hatelf_green",
+		"2c0f600b-4726-4171-934b-eb503803054d" => "fhair_hatelf_red",
 		"1ca9c3c2-431c-4400-8786-d80e596c84f3" => "fhair_hatfargo_blue",
 		"79d1cab2-364e-43a7-9463-8e1b7c5ec857" => "fhair_hatfargo_brown",
 		"bd0fbf4b-400b-427c-8902-9dbe1f182032" => "fhair_hatfargo_pink",
@@ -319,15 +331,11 @@ fn lookup_group(family: &str) -> String {
 		"4e5bd41c-40c8-47e4-a162-c426e30e8c67" => "fhair_hathip_red",
 		"e103ba99-4fd0-4a99-b78d-b4d406977376" => "fhair_hathotdog",
 		"d94e6dcb-12ab-44cd-8bcd-7d03e5f741cb" => "fhair_hatllama",
-		"d0d4b43b-33fe-4860-ae43-ab5c6d1672a3" => "fhair_hatlobotwitch_bad",
-		"cfc7ce20-f2a3-4578-b28f-22a9cdde743f" => "fhair_hatlobotwitch_good",
-		"22c8e9bb-a0b5-4d43-90b2-7d69a7de4469" => "fhair_hatlobotwitch_neutral",
 		"93226da4-1ee6-4a0b-aedd-469ab5d7bf78" => "fhair_hatmagician",
 		"8b89731d-e791-493a-ae11-2ad54450d3b6" => "fhair_hatmaid",
 		"3b328d89-1169-4987-9d7e-42d79e6bae50" => "fhair_hatmascotdiver_black",
 		"9be5aab7-7bd6-4cb3-8eae-33c7f465582d" => "fhair_hatmascotdiver_silver",
 		"c5d16114-4dd9-42f7-8c89-ab9d3b8affad" => "fhair_hatmascotdiver_tan",
-		"320e7019-f2cf-41c7-800c-0cad8ec45eb0" => "fhair_hatmascotknightclose_ep7",
 		"2148a6e2-7406-4f1e-bc0a-efd49111a6b0" => "fhair_hatmascotknightclose_blackplate",
 		"d02ac406-1236-4483-ae8a-f0d42be09ef4" => "fhair_hatmascotknightclose_redplate",
 		"c0dba44a-3599-4112-bc14-4e2308a6d947" => "fhair_hatmascotknightclose_steelplate",
@@ -341,12 +349,6 @@ fn lookup_group(family: &str) -> String {
 		"468d6c99-51ad-4fe5-be15-6127e487b8c2" => "fhair_hatnightcap_greenbananas",
 		"98003fd1-f2e8-424d-af42-8e0b28bd93a3" => "fhair_hatnightcap_pinkdots",
 		"a2de9b43-058b-4ecb-a42c-ad54565ff1d1" => "fhair_hatpirate",
-		"485c51af-3f24-4ca1-905c-73792b958b77" => "fhair_hatplantsimwitch_bad",
-		"b54a2267-0e72-47f0-bd96-feefa739f1ab" => "fhair_hatplantsimwitch_good",
-		"f9e51aa4-ae2c-4ed6-b926-6dbeb346a839" => "fhair_hatplantsimwitch_neutral",
-		"d8ee896d-ccc7-4ce9-bb1b-2e34423c9a99" => "fhair_hatplantsimwitch_wilt_bad",
-		"a55a4cd1-5c4f-4ddb-943b-040b05c56d4b" => "fhair_hatplantsimwitch_wilt_good",
-		"41fc244c-ea3d-466c-925f-e9d542b8ff8d" => "fhair_hatplantsimwitch_wilt_neutral",
 		"20124448-9ccd-4066-b680-85a8ddf9fb9a" => "fhair_hatpropeller",
 		"2e2df1f1-d154-405e-9185-dc05898440b9" => "fhair_hatsafari",
 		"97620939-4e80-413c-b82c-b817074fc3e5" => "fhair_hatseacaptain",
@@ -398,8 +400,6 @@ fn lookup_group(family: &str) -> String {
 		"a753b0f9-1642-4b2c-9dc6-e8ca40ee730c" => "fhair_highponytail_brownband",
 		"267279c3-22c4-4d57-a7c5-4f2b11875d84" => "fhair_highponytail_greyband",
 		"a34d0760-19b7-4216-aac8-67c58531089d" => "fhair_highponytail_redband",
-		"067602fe-e6e8-4510-92c9-ee6d203788f1" => "fhair_leafy_greens+whitepetals",
-		"60ebdc5a-38ef-4f0e-b769-5e2983d39a15" => "fhair_leafy_wilt+wiltedpetals",
 		"fc060700-907f-487c-b7d6-258d46dd4cee" => "fhair_lobot",
 		"8b5dca8f-746f-4d01-8dec-58fbeed357b8" => "fhair_lobotvampire",
 		"58406399-7371-4e03-bd1c-308985ca68aa" => "fhair_lobotwerewolf",
@@ -419,7 +419,7 @@ fn lookup_group(family: &str) -> String {
 		"b7a53665-324b-466f-9d92-49dc1516c5a3" => "fhair_maskninja_red",
 		"801d4c76-ffde-4384-9525-58be71f73ac8" => "fhair_masksuperninja_white",
 		"c7567b70-06f2-46c8-a9e9-129f50c2525c" => "fhair_mediumcenterpart",
-		"62a1173a-b6b2-4ad2-b18e-6eb729aff8c0" => "fhair_meg+pfhair_simple_straight",
+		"62a1173a-b6b2-4ad2-b18e-6eb729aff8c0" => "fhair_meg+simple",
 		"ba5eda8a-dae8-4168-9093-b19f5001cc7a" => "fhair_messedup",
 		"77744e07-393d-487b-85fd-e061d7588da6" => "fhair_messedup_pink",
 		"8ceb5d67-f2f7-424d-90e4-7d7ce22fc0bd" => "fhair_messedup_blue",
@@ -437,6 +437,7 @@ fn lookup_group(family: &str) -> String {
 		"bdc37065-7cee-4ad5-b0df-8a57b41ec8b5" => "fhair_mohawkspike_cottonpink",
 		"1b6a7f8b-6469-451a-85c0-4511c0f3cc57" => "fhair_mohawkspike_green",
 		"33e2d93a-bd7d-47b3-bccb-755c4b0771b6" => "fhair_mohawkspike_pink",
+		"173aa801-b774-4376-9399-637d0dfb14d8" => "fhair_mrsclaus",
 		"1bfa1cac-5e22-483e-9304-a15a7baf1caf" => "fhair_pagepunk",
 		"a3636e07-07e4-4007-b527-157e0f02ab2f" => "fhair_pagepunk_bloodred",
 		"693234da-488b-421e-a7b9-ce987ce588ac" => "fhair_pagepunk_pink",
@@ -484,8 +485,11 @@ fn lookup_group(family: &str) -> String {
 		"b276a951-8345-4d9b-aa44-12b6d6844052" => "fhair_towelturban_white",
 		"e9be725a-2a53-484d-8a48-e359787f7e1e" => "fhair_updoo",
 		"b843b9ee-7ad8-49bf-966a-2e4ba3ba4e9a" => "fhair_updoweddingveil",
+		"c30d5c96-db3b-4c8f-bb97-0c02e01f78b3" => "fhair_veilcurlsup",
 		"81299f25-4711-4aba-b111-4b00cca9a27f" => "fhair_weddingtiara",
 		"93f70fd6-b9e7-4058-8484-761f2555eea3" => "fhair_wreath",
+		"7400178f-e511-4a9e-a3b0-a9ad68cd90d1" => "tfhair_bun+pf_bald_bare_HIDDEN_7400178f",
+		"530792a6-6090-4089-9f8d-335daa6e6aa0" => "tfhair_bun+pf_bald_bare_HIDDEN_530792a6",
 		"d53f8765-f0ea-403f-9b69-10712c5a2658" => "mhair_achilles",
 		"87da0320-6d1f-4e15-a07c-780d2682b7db" => "mhair_achilles",
 		"21b4e4e9-7b1b-43ee-abf1-eb0055051887" => "mhair_achilles",
@@ -505,7 +509,7 @@ fn lookup_group(family: &str) -> String {
 		"6a743afc-0027-43ec-99ab-676efff070b8" => "mhair_bigfootvest_white",
 		"5d301e9c-7b93-41e4-aa8f-2395ac359724" => "mhair_caesar",
 		"e4edf402-05a4-46d4-ac92-2e8b45cf310b" => "mhair_choppypeak",
-		"48b77f24-5b4e-4243-b548-ee106f6dd053" => "mhair_closecrop",
+		"48b77f24-5b4e-4243-b548-ee106f6dd053" => "mhair_closecrop+puff",
 		"528d4155-b9db-4abf-bddd-1d0c8624a9c4" => "mhair_combover",
 		"51268afd-16d6-4b3b-a4dc-25cb20d8d18e" => "mhair_cornrows",
 		"f2518867-5e8d-4d26-b006-24a86f528b99" => "mhair_crewcut",
@@ -557,15 +561,15 @@ fn lookup_group(family: &str) -> String {
 		"ae1d17cb-026b-4121-8ac7-759c14adeea3" => "mhair_hatbaker_checker",
 		"3b93f1a9-ed9c-42f5-ba21-b1ae68bf5952" => "mhair_hatbaker_checker_ep7",
 		"efee9ea6-07e2-4216-b03b-18f22c54e272" => "mhair_hatbaker_white_ep6",
-		"b4f40b73-6ce4-4e54-bc96-3bf8c3bd45ba" => "mhair_hatbaker_teen_b4f40b73",
-		"1ef02c51-80bd-40b8-b89d-7cf50417ac82" => "mhair_hatbaker_teen_1ef02c51",
-		"e9436d60-e5f4-4403-a7d2-bc655b576d43" => "mhair_hatballcap_meshblue",
+		"b4f40b73-6ce4-4e54-bc96-3bf8c3bd45ba" => "mhair_hatbaker_checker",
+		"1ef02c51-80bd-40b8-b89d-7cf50417ac82" => "mhair_hatbaker_white",
+		"e9436d60-e5f4-4403-a7d2-bc655b576d43" => "mhair_hatballcap",
 		"972a64b1-ee1c-45c2-b26b-fe2fbab7115a" => "mhair_hatballcapnpc_deliveryperson",
 		"43ac6fd5-c38f-443a-a69e-412d69a8548a" => "mhair_hatballcapnpc_exterminator",
 		"47d64200-63eb-4c1a-a91f-6ad836008f28" => "mhair_hatballcapup_black",
 		"0ecd3f21-fe17-4760-a1a7-adb79ba5cf7c" => "mhair_hatballcapnpc_maildelivery",
 		"999eeeda-2def-445d-afeb-dddbe002073a" => "mhair_hatballcapnpc_paperdelivery",
-		"6519ecce-23d3-4346-b2d8-7735c508ddbf" => "mhair_hatballcapup_ep7_ultramarine",
+		"6519ecce-23d3-4346-b2d8-7735c508ddbf" => "mhair_hatballcapup_ep7",
 		"3674aecd-31a2-4a5e-8870-e67de693aa9a" => "mhair_hatballcapup_llama",
 		"cc38be16-33b3-494c-abd2-1b8142b13cdd" => "mhair_hatballcapup_meshblue",
 		"1d5f4c37-16c8-4ba1-ae31-5d85196bbf15" => "mhair_hatballcapup_meshgreyblack",
@@ -589,7 +593,7 @@ fn lookup_group(family: &str) -> String {
 		"2894c881-7b16-4f8c-a1e4-2cecb4f3f9f9" => "mhair_hatbucket_hula",
 		"d5f5735f-6ce9-4755-a0ee-b1688ef3ad35" => "mhair_hatbucket_pattern",
 		"4b9cd74f-30ac-4594-a406-7cc1a7660ec4" => "mhair_hatbucket_plain",
-		"14e1e322-b116-47a6-a525-45ef82db0709" => "mhair_hatcap_bluebrown",
+		"14e1e322-b116-47a6-a525-45ef82db0709" => "mhair_hatcap",
 		"ab9710d0-2b0f-40e2-8faf-b1a616889630" => "mhair_hatcapup_bluebrown",
 		"8970ab16-6eeb-4c71-8bb2-21dcbb72b904" => "mhair_hatcapup_logoblack",
 		"41666a06-db27-4d5a-97d5-e747ac1b839a" => "mhair_hatcapup_reambrown",
@@ -598,6 +602,9 @@ fn lookup_group(family: &str) -> String {
 		"f7962a5c-d360-472a-a2d4-214a03623ee7" => "mhair_hatcowboydome_gardner",
 		"4504b710-926b-4883-8607-8e5ce984190a" => "mhair_hatcowboydome_whiteband",
 		"30750321-52de-402f-bf06-7f41bf1fa65a" => "mhair_hatcowboyflat",
+		"1a0bf841-f8ad-44ea-a99b-5ffcce8825f8" => "mhair_hatelf_blue",
+		"1135fd5b-b4b7-42b7-b44c-acfc27949aba" => "mhair_hatelf_green",
+		"0c1d74a6-60d4-42a5-baa2-df3b723c9cdd" => "mhair_hatelf_red",
 		"9e9c10fc-6c3c-4297-a242-e9ea0c22f831" => "mhair_hatfargo_blue",
 		"7fed6fb3-22b5-480f-83cd-236527b01780" => "mhair_hatfargo_brown",
 		"7dae1ee7-2764-4b86-9e50-8d85b9ab35d0" => "mhair_hatfargo_pink",
@@ -708,7 +715,6 @@ fn lookup_group(family: &str) -> String {
 		"c73cd61e-c499-4b8e-ba07-a40020f9d6c9" => "mhair_longbangs_ep7",
 		"9a5dcaa8-b2fe-45a1-92cc-d02a1b27dbff" => "mhair_longsimple",
 		"3b4ea874-2be1-4a70-8edf-b5a61fc00111" => "mhair_longsimple_ep7",
-		"d5f7826a-2667-410d-aa08-4ae890d8fda8" => "mhair_lycan",
 		"84737935-771c-4ea0-ad21-a3ca4913879a" => "mhair_maskninja_black",
 		"94330db1-f9c2-4cd6-8283-4571c780bac8" => "mhair_maskninja_desert",
 		"e8e01cf7-5d43-43ff-9de5-1df9ab7dcdbd" => "mhair_maskninja_red",
@@ -740,17 +746,19 @@ fn lookup_group(family: &str) -> String {
 		"f1b5daf7-09be-48a5-9dc1-4104c6a37d53" => "mhair_realcloud",
 		"a31a5ea6-fe06-4088-8d0f-024ac4514ced" => "mhair_realcloud",
 		"a94bff77-5a18-47a9-b213-9bec1bcc2669" => "mhair_realcloud",
-		"dde0bfd9-1814-4921-a400-26cdaa3d08c4" => "mhair_rocker",
+		"dde0bfd9-1814-4921-a400-26cdaa3d08c4" => "mhair_rocker+simple",
 		"cba415ec-92b4-4c6c-8edf-1b5a2d837ead" => "mhair_rocker_blend",
 		"b6e67c8b-ade3-40cb-ba41-69d372f44b86" => "mhair_rodhumble",
 		"6453e9a8-61e0-40b9-9da0-29e36e885678" => "mhair_round",
+		"b89bd3d2-0da0-482a-a521-7af57882cc85" => "mhair_santacap",
+		"d44a2ae5-e662-4c2f-b79a-747de4488d9c" => "mhair_santacap_white",
 		"12617bc5-e7c5-4578-afae-185375cd5f1b" => "mhair_semibald",
-		"e1e7f578-b777-456e-b9dc-5c76ec9ba3c2" => "mhair_short+pmhair_bald_swirl",
-		"8eb49f3c-3c4a-484d-af9f-474523aff1aa" => "mhair_shortcombed",
+		"e1e7f578-b777-456e-b9dc-5c76ec9ba3c2" => "mhair_short+swirl",
+		"8eb49f3c-3c4a-484d-af9f-474523aff1aa" => "mhair_shortcombed+bare",
 		"ef4a4647-c327-4b75-b0a7-852e5492be6c" => "mhair_shortcombed_HIDDEN_ef4a4647",
 		"13d88528-ecfe-456b-a32f-1015be7ebf26" => "mhair_shortcombed_HIDDEN_13d88528",
 		"97c76133-155e-4c7c-955f-bc1c928938d5" => "mhair_shortcombed_HIDDEN_97c76133",
-		"1a992f31-b456-43ff-b789-d8b11159d889" => "mhair_shortgel+pmhair_bald_stubble",
+		"1a992f31-b456-43ff-b789-d8b11159d889" => "mhair_shortgel+stubble",
 		"bef929b6-01ba-4171-86bc-213347b54c44" => "mhair_shortgel_blue",
 		"53f42d90-06b3-4ba7-9f41-14a9bbc7acc3" => "mhair_shortgel_orange",
 		"409a6c30-3c99-4803-ae26-35f138a0a52e" => "mhair_shortgel_purple",
@@ -781,7 +789,20 @@ fn lookup_group(family: &str) -> String {
 		"0e5c1d88-bf69-4be0-b828-b97f57596e6b" => "uhair_commercialmascot_fries",
 		"26de136d-a5c4-49c7-a102-c4696858b818" => "uhair_cowmascot_holstein",
 		"8567aaff-02b9-405c-b228-f2df976e9350" => "uhair_hatdeepseadiver",
+		"d0d4b43b-33fe-4860-ae43-ab5c6d1672a3" => "uhair_hatlobotwitch_bad",
+		"cfc7ce20-f2a3-4578-b28f-22a9cdde743f" => "uhair_hatlobotwitch_good",
+		"22c8e9bb-a0b5-4d43-90b2-7d69a7de4469" => "uhair_hatlobotwitch_neutral",
+		"320e7019-f2cf-41c7-800c-0cad8ec45eb0" => "uhair_hatmascotknightclose_ep7",
+		"485c51af-3f24-4ca1-905c-73792b958b77" => "uhair_hatplantsimwitch_bad",
+		"b54a2267-0e72-47f0-bd96-feefa739f1ab" => "uhair_hatplantsimwitch_good",
+		"f9e51aa4-ae2c-4ed6-b926-6dbeb346a839" => "uhair_hatplantsimwitch_neutral",
+		"d8ee896d-ccc7-4ce9-bb1b-2e34423c9a99" => "uhair_hatplantsimwitch_wilt_bad",
+		"a55a4cd1-5c4f-4ddb-943b-040b05c56d4b" => "uhair_hatplantsimwitch_wilt_good",
+		"41fc244c-ea3d-466c-925f-e9d542b8ff8d" => "uhair_hatplantsimwitch_wilt_neutral",
+		"067602fe-e6e8-4510-92c9-ee6d203788f1" => "uhair_leafy_greens+whitepetals",
+		"60ebdc5a-38ef-4f0e-b769-5e2983d39a15" => "uhair_leafy_wilt+wiltedpetals",
 		"8076c5e8-108a-4307-ae75-7bb68c7be1ae" => "uhair_llamamascot",
+		"d5f7826a-2667-410d-aa08-4ae890d8fda8" => "uhair_lycan",
 		"00000000-0000-0000-0000-000000000000" => "uhair_null",
 		"6c03ccda-ab68-4f46-8e94-908f8bf3f503" => "uhair_shocked",
 		"d3fdf45e-ef95-4a8d-a3d2-759028a9cbc0" => "uhair_socialbunny_blue",

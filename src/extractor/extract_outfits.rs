@@ -24,15 +24,14 @@ pub fn extract_outfits(input_path: Option<PathBuf>, output_path: Option<PathBuf>
 	let mut outfit_groups: HashMap<String, Vec<DecodedResource>> = HashMap::new();
 
 	for outfit in outfits.values() {
-		if !(outfit.gzps.species == 1 &&
+		if outfit.gzps.species == 1 &&
 			!outfit.gzps.category.contains(&Category::Skin) &&
 			!outfit.gzps.category.contains(&Category::TryOn) &&
 			!outfit.gzps.category.contains(&Category::Overlay) &&
 			outfit.gzps.parts.len() == 1 &&
-			(outfit.gzps.parts[0] == Part::Body || outfit.gzps.parts[0] == Part::Top || outfit.gzps.parts[0] == Part::Bottom)) {
-				continue
+			(outfit.gzps.parts[0] == Part::Body || outfit.gzps.parts[0] == Part::Top || outfit.gzps.parts[0] == Part::Bottom) {
+				sort_into_group(outfit, &mut outfit_groups, &outfit.gzps.generate_key());
 		}
-		sort_into_group(outfit, &mut outfit_groups, &outfit.gzps.generate_key());
 	}
 
 	let mut outfit_group_names: Vec<&String> = outfit_groups.keys().collect();

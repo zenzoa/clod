@@ -3,14 +3,25 @@ use std::fs;
 use std::io::{ self, Write };
 use std::path::PathBuf;
 
-use crate::dbpf::{ Dbpf, PascalString, Identifier, TypeId };
+use crate::dbpf::{ Dbpf, Identifier, TypeId };
 use crate::dbpf::resource::DecodedResource;
 use crate::dbpf::resource_types::gzps::{ Age, Gender, Category };
 use crate::outfit::Outfit;
 
 use super::{ get_default_replacement_files, extract_resources, extract_gzps };
 
-pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: bool, all_categories: bool, hide_pack_icon: bool, flags: Option<u32>, family: Option<String>) -> Result<(), Box<dyn Error>> {
+pub fn default_hair(
+		source: Option<PathBuf>,
+		output: Option<PathBuf>,
+		add_ages: bool,
+		all_categories: bool,
+		visible: Option<bool>,
+		townified: Option<bool>,
+		hat: Option<bool>,
+		hide_pack_icon: bool,
+		same_family: bool
+	) -> Result<(), Box<dyn Error>> {
+
 	let source_dir = source.unwrap_or(PathBuf::from("./"));
 
 	let abs_path = fs::canonicalize(&source_dir)?;
@@ -23,6 +34,9 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 	// get all GZPS resources in original package(s)
 	let gzps_list = extract_gzps(&original_files)?;
 	let mut pairings: Vec<Option<usize>> = gzps_list.iter().map(|_| None).collect();
+	if gzps_list.is_empty() {
+		return Err("No GZPS resources found for original hairs".into());
+	}
 
 	// get all resources from replacement package(s)
 	let resources = extract_resources(&replacement_files)?;
@@ -35,15 +49,24 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 			replacement_hairs.push(hair);
 		}
 	}
+	if replacement_hairs.is_empty() {
+		return Err("No replacement hairs found".into());
+	}
+
+	let first_family = &gzps_list[0].family;
 
 	let mut gender: Option<Gender> = None;
 	let mut age_color_sets = Vec::new();
+	let mut separate_youngadult = false;
 
 	let mut unreplaced_warnings = Vec::new();
 
 	for (i, gzps) in gzps_list.iter().enumerate() {
 		if gzps.gender.len() == 1 {
 			gender = Some(gzps.gender[0]);
+		}
+		if !gzps.age.contains(&Age::Adult) && gzps.age.contains(&Age::YoungAdult) {
+			separate_youngadult = true;
 		}
 		for (j, hair) in replacement_hairs.iter().enumerate() {
 			if gzps.hairtone == hair.gzps.hairtone &&
@@ -70,7 +93,7 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 				let mut ages_to_add = Vec::new();
 				for age in &hair.gzps.age {
 					let age_color = format!("{}_{}", Age::stringify(&[*age], false), hair.gzps.hairtone.stringify());
-					if !age_color_sets.contains(&age_color) {
+					if !age_color_sets.contains(&age_color) && (*age != Age::YoungAdult || separate_youngadult) {
 						ages_to_add.push(*age);
 						age_color_sets.push(age_color.clone());
 						println!("Adding {age_color}");
@@ -99,6 +122,11 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 			new_gzps.shape = new_hair.gzps.shape;
 			new_gzps.overrides = new_hair.gzps.overrides.clone();
 
+			// adjust age if necessary
+			if !separate_youngadult && new_gzps.age.contains(&Age::Adult) && !new_gzps.age.contains(&Age::YoungAdult) {
+				new_gzps.age.push(Age::YoungAdult);
+			}
+
 			// enable for all categories
 			if all_categories {
 				new_gzps.category = vec![
@@ -114,13 +142,31 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 			}
 
 			// set flags
-			if let Some(flags_value) = flags {
-				new_gzps.flags = flags_value;
+			if let Some(visible) = visible {
+				if !visible && new_gzps.flags & 1 == 0 {
+					new_gzps.flags += 1;
+				} else if visible && new_gzps.flags & 1 > 0 {
+					new_gzps.flags -= 1;
+				}
+			}
+			if let Some(townified) = townified {
+				if !townified && new_gzps.flags & 8 == 0 {
+					new_gzps.flags += 8;
+				} else if townified && new_gzps.flags & 8 > 0 {
+					new_gzps.flags -= 8;
+				}
+			}
+			if let Some(hat) = hat {
+				if hat && new_gzps.flags & 2 == 0 {
+					new_gzps.flags += 2;
+				} else if !hat && new_gzps.flags & 2 > 0 {
+					new_gzps.flags -= 2;
+				}
 			}
 
 			// replace family with new value
-			if let Some(ref family_str) = family {
-				new_gzps.family = PascalString::new(family_str);
+			if same_family {
+				new_gzps.family = first_family.clone();
 			}
 
 			// set product to Base Game to remove pack icon
@@ -133,11 +179,23 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 			new_hair.idr.id.instance_id = new_gzps.id.instance_id;
 			new_hair.idr.id.resource_id = new_gzps.id.resource_id;
 
-			// Remove unnecessary 3IDR properties
-			new_hair.idr.ui_ref = None;
-			new_hair.idr.str_ref = None;
-			new_hair.idr.coll_ref = None;
-			new_hair.idr.gzps_ref = None;
+			if gzps_list[i].flags & 1 == 0 {
+				// remove unnecessary 3IDR properties for visible hair
+				new_hair.idr.ui_ref = None;
+				new_hair.idr.str_ref = None;
+				new_hair.idr.coll_ref = None;
+				new_hair.idr.gzps_ref = None;
+
+			} else {
+				// add required references to 3IDR for hidden hair (in case it's a hidden clone)
+				new_hair.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
+				new_hair.idr.str_ref = Some(Identifier::new(TypeId::TextList as u32, 0x7F43F357, 0x1, 0));
+				new_hair.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x7F43F357, 0x6CDBC43D, 0));
+				new_hair.idr.gzps_ref = Some(new_gzps.id.clone());
+
+				// create BINX resource
+				new_hair.generate_binx();
+			}
 
 			// copy new GZPS back to outfit
 			new_hair.gzps = new_gzps;
@@ -152,7 +210,6 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		let mut new_hair = replacement_hairs[*hair_index].clone();
 		let gzps = &new_hairs[0].gzps;
 
-		// create BINX resource
 		new_hair.gzps.age = ages.clone();
 
 		// copy relevant values from GZPS updated in the last step
@@ -174,6 +231,7 @@ pub fn default_hair(source: Option<PathBuf>, output: Option<PathBuf>, add_ages: 
 		new_hair.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x7F43F357, 0x6CDBC43D, 0));
 		new_hair.idr.gzps_ref = Some(new_hair.gzps.id.clone());
 
+		// create BINX resource
 		new_hair.generate_binx();
 
 		new_hair
