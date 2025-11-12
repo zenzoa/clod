@@ -220,7 +220,6 @@ pub fn default_hair(
 		new_hair.gzps.flags = gzps.flags;
 		new_hair.gzps.category = gzps.category.clone();
 		new_hair.gzps.skintone = gzps.skintone.clone();
-		new_hair.gzps.hairtone = gzps.hairtone;
 
 		new_hair.gzps.genetic = Some(0.0);
 		new_hair.gzps.priority = None;
