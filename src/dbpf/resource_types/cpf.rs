@@ -243,7 +243,7 @@ impl Cpf {
 				return Some(&prop.1);
 			}
 		}
-		return None
+		None
 	}
 }
 

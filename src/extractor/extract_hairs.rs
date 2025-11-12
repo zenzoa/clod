@@ -30,10 +30,10 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 	}
 
 	for (family, hairs) in hairs_by_family.iter_mut() {
-		let is_hat = hairs.iter().find(|h| h.gzps.flags & 2 > 0).is_some();
+		let is_hat = hairs.iter().any(|h| h.gzps.flags & 2 > 0);
 
-		let adult_youngadult_combined = hairs.iter().find(|h|
-			h.gzps.age.contains(&Age::Adult) && h.gzps.age.contains(&Age::YoungAdult)).is_some();
+		let adult_youngadult_combined = hairs.iter()
+			.any(|h| h.gzps.age.contains(&Age::Adult) && h.gzps.age.contains(&Age::YoungAdult));
 
 		let mut hat_ages = Vec::new();
 		for hair in hairs.iter() {
@@ -46,10 +46,8 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 			}
 		}
 
-		let is_special_color = hairs
-			.iter()
-			.find(|h| h.gzps.hairtone == HairTone::Other && !h.gzps.name.to_string().contains("bald_bare"))
-			.is_some();
+		let is_special_color = hairs.iter()
+			.any(|h| h.gzps.hairtone == HairTone::Other && !h.gzps.name.to_string().contains("bald_bare"));
 
 		let group_name = lookup_group(family);
 
@@ -126,7 +124,7 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 
 fn get_hairs(input_path: &Path) -> Result<HashMap<String, Hair>, Box<dyn Error>> {
 	let mut hairs = HashMap::new();
-	let packages = get_skin_packages(&input_path)?;
+	let packages = get_skin_packages(input_path)?;
 	for package in packages {
 		for resource in &package.resources {
 			if let DecodedResource::Gzps(gzps) = resource {
@@ -612,8 +610,8 @@ fn lookup_group(family: &str) -> String {
 		"b5e54d4e-5676-45a2-a241-a661eb7dc844" => "mhair_hatfedoraband_black",
 		"53dfbeac-654a-4fb7-836c-48ccadde7e24" => "mhair_hatfedoraband_blond",
 		"e719ad59-267d-44f1-8ec3-f8f2db30b90b" => "mhair_hatfedoraband_brown",
-		"e844fc12-07a8-4f10-b414-86608830ee16" => "mhair_hatfedoraband_grey_e844fc12",
-		"343d78ff-9c24-4b06-8c8e-1cd25617f1c6" => "mhair_hatfedoraband_grey_343d78ff",
+		"e844fc12-07a8-4f10-b414-86608830ee16" => "mhair_hatfedoraband_grey",
+		"343d78ff-9c24-4b06-8c8e-1cd25617f1c6" => "mhair_hatfedoraband_red",
 		"66f5eb08-81dd-45b2-8b44-8ef1c17ed839" => "mhair_hatfedoracasual",
 		"3dae6d1f-3c1a-443e-aabf-d127bcfaf7ee" => "mhair_hatfirefighter_red",
 		"43fc29ea-8511-48f4-a9af-028c6bbb302a" => "mhair_hatfirefighter_yellow",
