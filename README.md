@@ -8,6 +8,11 @@ Command Line Outfit Defaulter (and multi-tool) for The Sims 2
 - Run CLOD with the path to the folder with your Skins files (unless that's the folder you're already in) and the path to the output folder. For example: `clod extract-outfits ./skins -o ./skins/output`
 - In your `output` folder, you'll find a ton of `.package` files labeled with the ages, genders, type, and name of all the outfits in your game. Each contains the 3IDR and GZPS resources necessary to make default replacements.
 
+## Extract Original TS2 Hair Templates
+- Follow the same instructions for extracting outfits, but run the `extract-hairs` command instead. For example: `clod extract-hairs ./skins -o ./skins/output_hairs`
+- CLOD will create one folder per hair family, except where a single hair (like `fhairaline`) uses a different family for each age (in which case it combines them in one folder). Hairs that are normally hidden will have `HIDDEN` in the file name, and hairs that include duplicate ages (like young adult clones when the adult version is enabled for young adults) are disabled with a `.off` extension.
+- Hats usually have two sets of hair files: one for the hat itself, and one for the hatless state. The hatless files are hidden clones that link to the meshes and textures of other hairs in the game. Because it's common to replace hats with regular hair, CLOD disables the hatless files with a `.off` extension (except when a particular age doesn't have a companion hat file). If you want to replace the hatless hairs separately, move them into their own folder and remove the `.off` extensions.
+
 ## Create TS2 Clothing Default Replacements
 
 ### Step 1: Setup Your Files
@@ -57,6 +62,48 @@ You can navigate CLOD with the mouse or with the keyboard (use arrow keys to nav
 - Et voila! You should find a file named something like `DEFAULT.package` in your original folder.
 - Place this file in your TS2 Downloads folder, and launch TS2 to test your default replacement.
 - To update the thumbnails, remove `[TS2 Documents folder]/Thumbnails/CASThumbnails.package`.
+
+## Create TS2 Hair Default Replacements
+
+### Step 1: Setup Your Files
+- Create a folder that contains the original hair files. That is, the `.package` file(s) containing the the 3IDR + GZPS resources for the outfits you want to replace.
+- Inside this folder, place your replacement hair files in a subfolder. That is, the mesh and recolor `.package` files for the new hair you want to use. For example:
+```
+|-- fhair_poofs
+    |-- efhair_poofs_grey.package
+	|
+    |-- ayfhair_poofs_black.package
+    |-- ayfhair_poofs_blond.package
+    |-- ayfhair_poofs_brown.package
+    |-- ayfhair_poofs_red.package
+	|
+    |-- tfhair_poofs_black.package
+    |-- tfhair_poofs_blond.package
+    |-- tfhair_poofs_brown.package
+    |-- tfhair_poofs_red.package
+	|
+	|-- ...
+	|
+    |-- platasp_dogsill_AJBuns
+        |-- platasp_dogsill_AJBuns_MESH.package
+        |-- platasp_dogsill_AJBuns_black.package
+        |-- platasp_dogsill_AJBuns_blond.package
+        |-- platasp_dogsill_AJBuns_brown.package
+        |-- platasp_dogsill_AJBuns_red.package
+```
+
+### Step 2: Launch CLOD
+- Open a terminal
+- Launch CLOD with the path to the folder containing your outfits. For example: `clod default-hair ./fhair_poofs`.
+- By default this will automatically replace each hair file in the main with a matching age/color from the replacement subfolder, and save the output to `./fhair_poofs/fhair_poofs_DEFAULT.package`.
+- You can specify a different path for the output with the `-o/--output` parameter: `clod default-hair ./fhair_poofs -o ./mypoofsdefault.package`
+- If the replacement hair has more ages than the original, you can add those extra ages as decustomized and linked with the `-a/--add-ages` parameter: `clod default-hair ./fhair_poofs -a`
+- To enable the hair for all categories, add the `-c/--all-categories` parameter: `clod default-hair ./fhair_poofs -c`
+- To override the original hair's flags for CAS visibility, townification, or hat status*, use the `-v/--visible`, `-t/--townified`, and `-H/--hat` parameters: `clod default-hair ./fhair_poofs -v true -t false -H false`
+- For hairs that use multiple families (like `fhairaline`) you can force the replacements to use the same family (whatever family used by the first file) with the `-f/--same-family` parameter: `clod default-hair ./fhair_poofs -f`
+- You can remove the pack icon from CAS by setting the `product` setting to 1 with the `-p/--hide-pack-icon` parameter: `clod default-hair ./fhair_poofs -p`
+
+\* Note on hats: If you want sims to revert to another default replacement when they remove the hat, you'll have to link the hatless hidden clones manually. But if you're replacing one of the original hats with a regular hair and don't want the sim to remove it, you can just turn off the hat flag and ignore the hatless hidden clones.
 
 ## Compress TS2 Package Files
 - Open a terminal and navigate to the folder containing the package file(s) you want to compress.
