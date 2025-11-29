@@ -26,7 +26,7 @@ pub struct Gzps {
 	pub creator: PascalString,
 	pub family: PascalString,
 	pub genetic: Option<f32>,
-	pub priority: Option<u32>,
+	pub priority: Option<i32>,
 	pub outfit_type: PascalString,
 	pub skintone: PascalString,
 	pub hairtone: HairTone,
@@ -120,7 +120,7 @@ impl Gzps {
 		};
 
 		gzps.priority = match cpf.get_prop("priority") {
-			Some(PropertyValue::Uint(val)) => Some(*val),
+			Some(PropertyValue::Int(val)) => Some(*val),
 			_ => None
 		};
 
@@ -218,7 +218,7 @@ impl Gzps {
 			props.push(("genetic".to_string(), PropertyValue::Float(genetic)));
 		}
 		if let Some(priority) = self.priority {
-			props.push(("priority".to_string(), PropertyValue::Uint(priority)));
+			props.push(("priority".to_string(), PropertyValue::Int(priority)));
 		}
 		props.push(("type".to_string(), PropertyValue::String(self.outfit_type.clone())));
 		props.push(("skintone".to_string(), PropertyValue::String(self.skintone.clone())));
@@ -260,7 +260,7 @@ impl Gzps {
 			"creator" => self.creator = PascalString::new(value),
 			"family" => self.family = PascalString::new(value),
 			"genetic" => self.genetic = if value.to_lowercase() == "none" { None } else { Some(value.parse::<f32>()?)},
-			"priority" => self.priority = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
+			"priority" => self.priority = if value.to_lowercase() == "none" { None } else { Some(value.parse::<i32>()?)},
 			"outfit_type" => self.outfit_type = PascalString::new(value),
 			"skintone" => self.skintone = PascalString::new(value),
 			"hairtone" => self.hairtone = HairTone::from_string(value),
@@ -630,6 +630,7 @@ impl Part {
 
 #[derive(Copy, Clone, Default, PartialEq, Eq)]
 pub enum HairTone {
+	None,
 	Black,
 	Brown,
 	Blond,
@@ -646,6 +647,7 @@ impl HairTone {
 
 	pub fn to_pascal_string(self) -> PascalString {
 		match self {
+			Self::None => PascalString::new("00000000-0000-0000-0000-000000000000"),
 			Self::Black => PascalString::new("00000001-0000-0000-0000-000000000000"),
 			Self::Brown => PascalString::new("00000002-0000-0000-0000-000000000000"),
 			Self::Blond => PascalString::new("00000003-0000-0000-0000-000000000000"),
@@ -657,6 +659,7 @@ impl HairTone {
 
 	pub fn from_string(string: &str) -> Self {
 		match string {
+			"00000000-0000-0000-0000-000000000000" => Self::None,
 			"00000001-0000-0000-0000-000000000000" => Self::Black,
 			"00000002-0000-0000-0000-000000000000" => Self::Brown,
 			"00000003-0000-0000-0000-000000000000" => Self::Blond,
@@ -668,6 +671,7 @@ impl HairTone {
 
 	pub fn stringify(&self) -> String {
 		(match self {
+			Self::None => "none",
 			Self::Black => "black",
 			Self::Brown => "brown",
 			Self::Blond => "blond",

@@ -1,14 +1,13 @@
 use std::error::Error;
-use std::fs;
 use std::io::{ self, Write };
 use std::path::PathBuf;
 
 use crate::dbpf::{ Dbpf, Identifier, TypeId };
 use crate::dbpf::resource::DecodedResource;
-use crate::dbpf::resource_types::gzps::{ Age, Gender, Category };
+use crate::dbpf::resource_types::gzps::{ Age, Gender, Category, HairTone };
 use crate::outfit::Outfit;
 
-use super::{ get_default_replacement_files, extract_resources, extract_gzps };
+use super::{ get_default_replacement_files, extract_resources, extract_gzps, default_output_path };
 
 pub fn default_hair(
 		source: Option<PathBuf>,
@@ -24,10 +23,7 @@ pub fn default_hair(
 
 	let source_dir = source.unwrap_or(PathBuf::from("./"));
 
-	let abs_path = fs::canonicalize(&source_dir)?;
-	let dir_name = abs_path.file_name().map(|s| s.to_string_lossy()).unwrap_or("".into());
-	let default_output = source_dir.join(PathBuf::from(format!("{dir_name}_DEFAULT.package")));
-	let output_path = output.unwrap_or(default_output);
+	let output_path = output.unwrap_or(default_output_path(&source_dir, "DEFAULT"));
 
 	let (original_files, replacement_files) = get_default_replacement_files(&source_dir)?;
 
@@ -45,7 +41,10 @@ pub fn default_hair(
 	let mut replacement_hairs = Vec::new();
 	for resource in &resources {
 		if let DecodedResource::Gzps(gzps) = resource {
-			let hair = Outfit::from_resources(gzps.clone(), &resources, true)?;
+			let mut hair = Outfit::from_resources(gzps.clone(), &resources, true)?;
+			if hair.gzps.hairtone == HairTone::None {
+				hair.gzps.hairtone = HairTone::Other;
+			}
 			replacement_hairs.push(hair);
 		}
 	}

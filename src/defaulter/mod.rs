@@ -60,14 +60,11 @@ pub fn extract_gzps(files: &[PathBuf]) -> Result<Vec<Gzps>, Box<dyn Error>> {
 	Ok(gzps_list)
 }
 
-pub fn default_output_path(files: &[PathBuf], source_dir: &Path) -> PathBuf {
-	if files.len() == 1 {
-		files[0].with_file_name(if let Some(file_name) = files[0].file_name() {
-			file_name.to_string_lossy().replace(".package", "_DEFAULT.package")
-		} else {
-			"DEFAULT.package".to_string()
-		})
+pub fn default_output_path(source_dir: &Path, suffix: &str) -> PathBuf {
+	if let Ok(abs_path) = fs::canonicalize(source_dir) {
+		let dir_name = abs_path.file_name().map(|s| s.to_string_lossy()).unwrap_or("".into());
+		source_dir.join(PathBuf::from(format!("{dir_name}_{suffix}.package")))
 	} else {
-		source_dir.join("DEFAULT.package")
+		source_dir.join("{suffix}.package")
 	}
 }

@@ -5,7 +5,7 @@ use cursive::{ Cursive, With };
 use cursive::view::{ Nameable, Scrollable, Resizable };
 use cursive::views::{ Dialog, DialogFocus, Button, TextView, EditView, Checkbox, SelectView, LinearLayout, Panel, PaddedView };
 
-use crate::dbpf::{ Dbpf, Identifier, TypeId };
+use crate::dbpf::{ Dbpf, Identifier, TypeId, PascalString };
 use crate::dbpf::resource::DecodedResource;
 use crate::dbpf::resource_types::gzps::{ Gzps, Age, Gender, Category };
 use crate::dbpf::resource_types::text_list::TextList;
@@ -15,7 +15,7 @@ use super::{ get_default_replacement_files, extract_resources, extract_gzps, def
 
 #[derive(Clone, Default)]
 struct SivData {
-	output_path: PathBuf,
+	source_dir: PathBuf,
 	gzps_list: Vec<Gzps>,
 	outfits: Vec<Outfit>,
 	pairings: Vec<Option<usize>>
@@ -28,7 +28,6 @@ pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 
 	// get all GZPS resources in original package(s)
 	let gzps_list = extract_gzps(&original_files)?;
-	let pairings: Vec<Option<usize>> = gzps_list.iter().map(|_| None).collect();
 
 	// get all resources from replacement package(s)
 	let resources = extract_resources(&replacement_files)?;
@@ -41,11 +40,31 @@ pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 			outfits.push(outfit);
 		}
 	}
+	outfits.sort_by_key(|o| o.title.clone());
+
+	// set up initial pairings
+	let mut outfit_indexes: Vec<usize> = outfits.iter().enumerate().map(|(i, _)| i).collect();
+	let pairings: Vec<Option<usize>> = gzps_list.iter().map(|gzps| {
+		let mut pairing = None;
+		let mut index_to_remove = None;
+		for (j, outfit_index) in outfit_indexes.iter().enumerate() {
+			let outfit = &outfits[*outfit_index];
+			if Age::are_compatible(&gzps.age, &outfit.gzps.age) && Gender::are_compatible(&gzps.gender, &outfit.gzps.gender, &gzps.age) {
+				pairing = Some(*outfit_index);
+				index_to_remove = Some(j);
+				break;
+			}
+		}
+		if let Some(index_to_remove) = index_to_remove {
+			outfit_indexes.remove(index_to_remove);
+		}
+		pairing
+	}).collect();
 
 	let mut siv = cursive::default();
 
 	let data = SivData {
-		output_path: default_output_path(&original_files, &source_dir),
+		source_dir,
 		gzps_list,
 		outfits,
 		pairings
@@ -305,7 +324,7 @@ fn set_gender(s: &mut Cursive, gender: Gender, value: bool) {
 fn ask_for_filename(s: &mut Cursive) {
 	let mut output_path = PathBuf::new();
 	s.with_user_data(|data: &mut SivData| {
-		output_path = data.output_path.clone();
+		output_path = default_output_path(&data.source_dir, "DEFAULT");
 	});
 	s.add_layer(
 		Dialog::around(
@@ -319,11 +338,14 @@ fn ask_for_filename(s: &mut Cursive) {
 						.with_name("filename")
 						.min_width(40))
 					.child(LinearLayout::horizontal()
+						.child(Checkbox::new().checked().with_name("compress"))
+						.child(TextView::new("Compress resources")))
+					.child(LinearLayout::horizontal()
 						.child(Checkbox::new().checked().with_name("product_fix"))
 						.child(TextView::new("Hide pack icon")))
 					.child(LinearLayout::horizontal()
-						.child(Checkbox::new().checked().with_name("compress"))
-						.child(TextView::new("Compress resources"))))
+						.child(Checkbox::new().checked().with_name("add_extras"))
+						.child(TextView::new("Save extra outfits"))))
 			.padding_lrtb(2, 2, 1, 0)
 			.title("Save Default Replacement")
 			.button("Cancel", |s| { s.pop_layer(); })
@@ -333,13 +355,18 @@ fn ask_for_filename(s: &mut Cursive) {
 }
 
 fn save_package(s: &mut Cursive) {
+	s.add_layer(Dialog::around(TextView::new("Saving...")));
+
 	let filename = s.find_name::<EditView>("filename").unwrap().get_content();
 	let output_path = PathBuf::from(filename.as_str());
 
-	let product_fix = s.find_name::<Checkbox>("product_fix").unwrap().is_checked();
 	let compress = s.find_name::<Checkbox>("compress").unwrap().is_checked();
+	let product_fix = s.find_name::<Checkbox>("product_fix").unwrap().is_checked();
+	let add_extras = s.find_name::<Checkbox>("add_extras").unwrap().is_checked();
 
 	let mut resources = Vec::new();
+
+	let mut add_extras_result = None;
 
 	s.with_user_data(|data: &mut SivData| {
 		let mut new_outfits = Vec::new();
@@ -418,17 +445,85 @@ fn save_package(s: &mut Cursive) {
 			.map(|t| DecodedResource::TextList(t.clone()))
 			.collect::<Vec<DecodedResource>>();
 		resources.extend_from_slice(&text_list_resources);
+
+		// get all outfits not assigned to be a default replacement
+		if add_extras {
+			let mut extra_outfits: Vec<&mut Outfit> = data.outfits.iter_mut().enumerate().filter(|(i, _)| {
+				!data.pairings.iter().any(|p| p.is_some_and(|j| j == *i))
+			}).map(|(_, outfit)| outfit).collect();
+			let extra_resources: Vec<DecodedResource> = get_outfit_resources(&mut extra_outfits, product_fix)
+				.into_iter()
+				.filter(|r| !resources.iter().any(|r2| r2.get_id() == r.get_id()))
+				.collect();
+			if !extra_resources.is_empty() {
+				let extra_path = default_output_path(&data.source_dir, "EXTRAS");
+				add_extras_result = Some(Dbpf::write_package_file(&extra_resources, &extra_path, compress));
+			}
+		}
 	});
 
 	// save package file
-	match Dbpf::write_package_file(&resources, &output_path, compress) {
-		Ok(_) => {
+	let save_result = Dbpf::write_package_file(&resources, &output_path, compress);
+	match (save_result, add_extras_result) {
+		(Ok(_), None) | (Ok(_), Some(Ok(_))) => {
 			s.add_layer(Dialog::around(TextView::new("Success!"))
 				.button("Ok", |s| s.quit()));
 		}
-		Err(why) => {
-			s.add_layer(Dialog::around(TextView::new(format!("{}", why)))
+		(Err(why), None) | (Err(why), Some(Ok(_))) => {
+			s.add_layer(Dialog::around(TextView::new(format!("Unable to save default: {why}")))
+				.button("Ok", |s| s.quit()));
+		}
+		(Ok(_), Some(Err(why))) => {
+			s.add_layer(Dialog::around(TextView::new(format!("Unable to save extras: {why}")))
+				.button("Ok", |s| s.quit()));
+		}
+		(Err(why), Some(Err(why2))) => {
+			s.add_layer(Dialog::around(TextView::new(format!("Unable to save default: {why}\nUnable to save extras: {why2}")))
 				.button("Ok", |s| s.quit()));
 		}
 	}
+}
+
+fn get_outfit_resources(outfits: &mut [&mut Outfit], product_fix: bool) -> Vec<DecodedResource> {
+	let mut text_lists: Vec<TextList> = Vec::new();
+
+	for outfit in outfits.iter_mut() {
+		// create a STR# if none exists with this outfit's group id
+		let text_list_id = Identifier::new(TypeId::TextList as u32, outfit.gzps.id.group_id, 0x1, 0);
+		if !text_lists.iter().any(|t| t.id.group_id == outfit.gzps.id.group_id) {
+			text_lists.push(TextList::create_empty(text_list_id.clone()));
+		}
+
+		// decustomize
+		outfit.gzps.creator = PascalString::new("00000000-0000-0000-0000-000000000000");
+
+		// enable for young adult + adult
+		if outfit.gzps.age.contains(&Age::YoungAdult) && !outfit.gzps.age.contains(&Age::Adult) {
+			outfit.gzps.age.push(Age::Adult);
+		} else if outfit.gzps.age.contains(&Age::Adult) && !outfit.gzps.age.contains(&Age::YoungAdult) {
+			outfit.gzps.age.push(Age::YoungAdult);
+		}
+
+		// set product to Base Game to remove pack icon
+		if product_fix {
+			outfit.gzps.product = Some(1);
+		}
+
+		// create BINX resource
+		outfit.generate_binx();
+	}
+
+	// collect resources together
+	let mut resources: Vec<DecodedResource> = outfits.iter().flat_map(|outfit| {
+		outfit.get_resources()
+	}).collect();
+
+	// add any STR# resources that were made
+	let text_list_resources = text_lists
+		.iter()
+		.map(|t| DecodedResource::TextList(t.clone()))
+		.collect::<Vec<DecodedResource>>();
+	resources.extend_from_slice(&text_list_resources);
+
+	resources
 }
