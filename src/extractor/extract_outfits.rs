@@ -2,7 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
-use crate::dbpf::Dbpf;
+use crate::dbpf::{ Dbpf, TypeId };
 use crate::dbpf::resource::DecodedResource;
 use crate::dbpf::resource_types::gzps::{ Gzps, Category, Part };
 use crate::dbpf::resource_types::idr::Idr;
@@ -39,8 +39,9 @@ pub fn extract_outfits(input_path: Option<PathBuf>, output_path: Option<PathBuf>
 
 	for name in outfit_group_names {
 		if let Some(resources) = outfit_groups.get(name) {
+			let count = resources.iter().filter(|r| r.get_id().type_id == TypeId::Gzps).count();
 			let mut file_path = output_path.to_path_buf();
-			file_path.push(format!("{name}.package"));
+			file_path.push(format!("{name}_{count}.package"));
 			Dbpf::write_package_file(resources, &file_path, false)?;
 		}
 	}
