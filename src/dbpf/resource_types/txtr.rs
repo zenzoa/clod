@@ -68,7 +68,7 @@ impl TxtrBlock {
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		PascalString::new("cImageData").write::<u8>(writer)?;
-		(TypeId::Txtr as u32).write_le(writer)?;
+		u32::from(TypeId::Txtr).write_le(writer)?;
 		self.version.write_le(writer)?;
 
 		(SGResource { file_name: self.file_name.clone() }).write(writer)?;

@@ -187,9 +187,9 @@ pub fn default_hair(
 
 			} else {
 				// add required references to 3IDR for hidden hair (in case it's a hidden clone)
-				new_hair.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
-				new_hair.idr.str_ref = Some(Identifier::new(TypeId::TextList as u32, 0x7F43F357, 0x1, 0));
-				new_hair.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x7F43F357, 0x6CDBC43D, 0));
+				new_hair.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
+				new_hair.idr.str_ref = Some(Identifier::new(u32::from(TypeId::TextList), 0x7F43F357, 0x1, 0));
+				new_hair.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x7F43F357, 0x6CDBC43D, 0));
 				new_hair.idr.gzps_ref = Some(new_gzps.id.clone());
 
 				// create BINX resource
@@ -224,9 +224,9 @@ pub fn default_hair(
 		new_hair.gzps.priority = None;
 
 		// add required references to 3IDR
-		new_hair.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
-		new_hair.idr.str_ref = Some(Identifier::new(TypeId::TextList as u32, 0x7F43F357, 0x1, 0));
-		new_hair.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x7F43F357, 0x6CDBC43D, 0));
+		new_hair.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
+		new_hair.idr.str_ref = Some(Identifier::new(u32::from(TypeId::TextList), 0x7F43F357, 0x1, 0));
+		new_hair.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x7F43F357, 0x6CDBC43D, 0));
 		new_hair.idr.gzps_ref = Some(new_hair.gzps.id.clone());
 
 		// create BINX resource

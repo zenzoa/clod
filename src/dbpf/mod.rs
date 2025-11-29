@@ -126,34 +126,62 @@ impl Dbpf {
 	}
 }
 
-#[repr(u32)]
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub enum TypeId {
 	#[default]
-	Unknown = 0xFFFFFFFF,
-	Dir = 0xE86B1EEF,
-	Gmdc = 0xAC4F8687,
-	Gmnd = 0x7BA3838C,
-	Shpe = 0xFC6EB1F7,
-	Cres = 0xE519C933,
-	Txmt = 0x49596978,
-	Txtr = 0x1C4A276C,
-	Gzps = 0xEBCF3E27,
-	Idr = 0xAC506764,
-	Binx = 0x0C560F39,
-	Xhtn = 0x8C1580B5,
-	Ui = 0x00000000,
-	Coll = 0x6C4F359D,
-	TextList = 0x53545223,
-	DataList = 0x6A836D56,
-	BoneData = 0xE9075BC5,
-	Transform = 0x65246462,
-	ShapeRef = 0x65245517,
+	Unknown,
+	Dir,
+	Gmdc,
+	Gmnd,
+	Shpe,
+	Cres,
+	Txmt,
+	Txtr,
+	Gzps,
+	Idr,
+	Binx,
+	Xhtn,
+	Ui,
+	Coll,
+	TextList,
+	DataList,
+	BoneData,
+	Transform,
+	ShapeRef,
+	Other(u32)
+}
+
+impl From<TypeId> for u32 {
+	fn from(type_id: TypeId) -> u32 {
+		match type_id {
+			TypeId::Unknown => 0xFFFFFFFF,
+			TypeId::Dir => 0xE86B1EEF,
+			TypeId::Gmdc => 0xAC4F8687,
+			TypeId::Gmnd => 0x7BA3838C,
+			TypeId::Shpe => 0xFC6EB1F7,
+			TypeId::Cres => 0xE519C933,
+			TypeId::Txmt => 0x49596978,
+			TypeId::Txtr => 0x1C4A276C,
+			TypeId::Gzps => 0xEBCF3E27,
+			TypeId::Idr => 0xAC506764,
+			TypeId::Binx => 0x0C560F39,
+			TypeId::Xhtn => 0x8C1580B5,
+			TypeId::Ui => 0x00000000,
+			TypeId::Coll => 0x6C4F359D,
+			TypeId::TextList => 0x53545223,
+			TypeId::DataList => 0x6A836D56,
+			TypeId::BoneData => 0xE9075BC5,
+			TypeId::Transform => 0x65246462,
+			TypeId::ShapeRef => 0x65245517,
+			TypeId::Other(inner) => inner,
+		}
+	}
 }
 
 impl From<u32> for TypeId {
 	fn from(value: u32) -> Self {
 		match value {
+			0xFFFFFFFF => Self::Unknown,
 			0xE86B1EEF => Self::Dir,
 			0xAC4F8687 => Self::Gmdc,
 			0x7BA3838C => Self::Gmnd,
@@ -172,7 +200,7 @@ impl From<u32> for TypeId {
 			0xE9075BC5 => Self::BoneData,
 			0x65246462 => Self::Transform,
 			0x65245517 => Self::ShapeRef,
-			 _ => Self::Unknown,
+			inner => Self::Other(inner),
 		}
 	}
 }
@@ -180,6 +208,7 @@ impl From<u32> for TypeId {
 impl fmt::Display for TypeId {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			Self::Unknown => write!(f, "Unknown"),
 			Self::Dir => write!(f, "DIR"),
 			Self::Gmdc => write!(f, "GMDC"),
 			Self::Gmnd => write!(f, "GMND"),
@@ -198,7 +227,7 @@ impl fmt::Display for TypeId {
 			Self::BoneData => write!(f, "cBoneDataExtension"),
 			Self::Transform => write!(f, "cTransformNode"),
 			Self::ShapeRef => write!(f, "cShapeRefNode"),
-			Self::Unknown => write!(f, "Unknown")
+			Self::Other(inner) => write!(f, "#{inner}"),
 		}
 	}
 }
@@ -231,7 +260,7 @@ impl Identifier {
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, use_tgir: bool) -> Result<(), Box<dyn Error>> {
-		(self.type_id as u32).write_le(writer)?;
+		u32::from(self.type_id).write_le(writer)?;
 		self.group_id.write_le(writer)?;
 		self.instance_id.write_le(writer)?;
 		if use_tgir {

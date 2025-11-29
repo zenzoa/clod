@@ -85,7 +85,7 @@ impl CresBlock {
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		PascalString::new("cResourceNode").write::<u8>(writer)?;
-		(TypeId::Cres as u32).write_le(writer)?;
+		u32::from(TypeId::Cres).write_le(writer)?;
 		self.version.write_le(writer)?;
 
 		1u8.write(writer)?;

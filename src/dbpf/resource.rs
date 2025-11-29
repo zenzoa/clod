@@ -33,6 +33,7 @@ pub enum DecodedResource {
 	Binx(Binx),
 	Xhtn(Xhtn),
 	TextList(TextList),
+	Other(Resource)
 }
 
 impl DecodedResource {
@@ -49,7 +50,7 @@ impl DecodedResource {
 			TypeId::Binx => Ok(DecodedResource::Binx(Binx::new(resource)?)),
 			TypeId::Xhtn => Ok(DecodedResource::Xhtn(Xhtn::new(resource)?)),
 			TypeId::TextList => Ok(DecodedResource::TextList(TextList::new(resource)?)),
-			_ => Err("Unknown resource type".into())
+			_ => Ok(DecodedResource::Other(resource.clone()))
 		}
 	}
 
@@ -66,6 +67,7 @@ impl DecodedResource {
 			Self::Binx(binx) => { binx.to_bytes() }
 			Self::Xhtn(xhtn) => { xhtn.to_bytes() }
 			Self::TextList(text_list) => { text_list.to_bytes() }
+			Self::Other(resource) => { Ok(resource.data.clone()) }
 		}
 	}
 
@@ -82,6 +84,7 @@ impl DecodedResource {
 			Self::Binx(binx) => { binx.id.clone() }
 			Self::Xhtn(xhtn) => { xhtn.id.clone() }
 			Self::TextList(text_list) => { text_list.id.clone() }
+			Self::Other(resource) => { resource.id.clone() }
 		}
 	}
 

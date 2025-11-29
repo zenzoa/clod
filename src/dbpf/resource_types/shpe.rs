@@ -32,7 +32,7 @@ impl Shpe {
 					let re = Regex::new(r"^##0x([0-9,a-f,A-F]+)!(.+)$").unwrap();
 					let gmnd_name = gmnd_item.name.to_string();
 					if let Some(captures) = re.captures(&gmnd_name) {
-						let type_id = TypeId::Gmnd as u32;
+						let type_id = u32::from(TypeId::Gmnd);
 						let group_id = u32::from_str_radix(&captures[1], 16).unwrap();
 						let instance_id = hash_crc24(&captures[2]);
 						let resource_id = hash_crc32(&captures[2]);
@@ -118,7 +118,7 @@ impl ShpeBlock {
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		PascalString::new("cShape").write::<u8>(writer)?;
-		(TypeId::Shpe as u32).write_le(writer)?;
+		u32::from(TypeId::Shpe).write_le(writer)?;
 		self.version.write_le(writer)?;
 
 		(SGResource { file_name: self.file_name.clone() }).write(writer)?;

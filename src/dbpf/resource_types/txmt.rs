@@ -96,7 +96,7 @@ impl TxmtBlock {
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		PascalString::new("cMaterialDefinition").write::<u8>(writer)?;
-		(TypeId::Txmt as u32).write_le(writer)?;
+		u32::from(TypeId::Txmt).write_le(writer)?;
 		self.version.write_le(writer)?;
 
 		(SGResource { file_name: self.file_name.clone() }).write(writer)?;

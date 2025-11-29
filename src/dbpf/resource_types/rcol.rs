@@ -58,7 +58,7 @@ impl Rcol {
 			link.group_id.write_le(writer)?;
 			link.instance_id.write_le(writer)?;
 			link.resource_id.write_le(writer)?;
-			(link.type_id as u32).write_le(writer)?;
+			u32::from(link.type_id).write_le(writer)?;
 		}
 
 		(self.blocks.len() as u32).write_le(writer)?;
@@ -120,12 +120,12 @@ impl RcolBlock {
 
 	pub fn write_id(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		match self {
-			RcolBlock::Gmdc(_) => (TypeId::Gmdc as u32).write_le(writer)?,
-			RcolBlock::Gmnd(_) => (TypeId::Gmnd as u32).write_le(writer)?,
-			RcolBlock::Shpe(_) => (TypeId::Shpe as u32).write_le(writer)?,
-			RcolBlock::Cres(_) => (TypeId::Cres as u32).write_le(writer)?,
-			RcolBlock::Txmt(_) => (TypeId::Txmt as u32).write_le(writer)?,
-			RcolBlock::Txtr(_) => (TypeId::Txtr as u32).write_le(writer)?,
+			RcolBlock::Gmdc(_) => u32::from(TypeId::Gmdc).write_le(writer)?,
+			RcolBlock::Gmnd(_) => u32::from(TypeId::Gmnd).write_le(writer)?,
+			RcolBlock::Shpe(_) => u32::from(TypeId::Shpe).write_le(writer)?,
+			RcolBlock::Cres(_) => u32::from(TypeId::Cres).write_le(writer)?,
+			RcolBlock::Txmt(_) => u32::from(TypeId::Txmt).write_le(writer)?,
+			RcolBlock::Txtr(_) => u32::from(TypeId::Txtr).write_le(writer)?,
 			RcolBlock::Unknown(block_id) => block_id.write_le(writer)?
 		}
 		Ok(())

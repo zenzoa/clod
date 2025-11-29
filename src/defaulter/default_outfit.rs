@@ -403,7 +403,7 @@ fn save_package(s: &mut Cursive) {
 				let outfit_name = new_gzps.name.to_string().to_lowercase();
 				if outfit_name.starts_with('y') && outfit_name.contains("clone") {
 					// create a STR# if none exists with this outfit's group id
-					let text_list_id = Identifier::new(TypeId::TextList as u32, new_gzps.id.group_id, 0x1, 0);
+					let text_list_id = Identifier::new(u32::from(TypeId::TextList), new_gzps.id.group_id, 0x1, 0);
 					if !text_lists.iter().any(|t| t.id.group_id == new_gzps.id.group_id) {
 						text_lists.push(TextList::create_empty(text_list_id.clone()));
 					}
@@ -412,9 +412,9 @@ fn save_package(s: &mut Cursive) {
 					new_outfit.generate_binx();
 
 					// add additional references to 3IDR
-					new_outfit.idr.ui_ref = Some(Identifier::new(TypeId::Ui as u32, 0, 0, 0));
+					new_outfit.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
 					new_outfit.idr.str_ref = Some(text_list_id.clone());
-					new_outfit.idr.coll_ref = Some(Identifier::new(TypeId::Coll as u32, 0x0FFEFEFE, 0x0FFE0080, 0));
+					new_outfit.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0x0FFE0080, 0));
 					new_outfit.idr.gzps_ref = Some(new_gzps.id.clone());
 
 				} else {
@@ -489,7 +489,7 @@ fn get_outfit_resources(outfits: &mut [&mut Outfit], product_fix: bool) -> Vec<D
 
 	for outfit in outfits.iter_mut() {
 		// create a STR# if none exists with this outfit's group id
-		let text_list_id = Identifier::new(TypeId::TextList as u32, outfit.gzps.id.group_id, 0x1, 0);
+		let text_list_id = Identifier::new(u32::from(TypeId::TextList), outfit.gzps.id.group_id, 0x1, 0);
 		if !text_lists.iter().any(|t| t.id.group_id == outfit.gzps.id.group_id) {
 			text_lists.push(TextList::create_empty(text_list_id.clone()));
 		}
