@@ -116,7 +116,6 @@ impl Cpf {
 				};
 
 				let raw_value = el.get_text().unwrap_or("".into());
-
 				let prop_value = match prop_type {
 					DataType::Bool => PropertyValue::Bool(
 						raw_value == "True"
@@ -124,7 +123,7 @@ impl Cpf {
 					DataType::Uint => PropertyValue::Uint(
 						match raw_value.strip_prefix("0x") {
 							Some(hex) => u32::from_str_radix(hex, 16)?,
-							None => u32::from_str(&raw_value)?
+							None => i32::from_str(&raw_value)? as u32
 						}
 					),
 					DataType::Int => PropertyValue::Int(

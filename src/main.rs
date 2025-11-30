@@ -70,6 +70,14 @@ enum Command {
 		#[arg(short, long, value_name="FOLDER")]
 		output: Option<PathBuf>
 	},
+	/// Extracts makeup and unmeshed facial hair from game files for use in default replacements
+	ExtractMakeup {
+		/// Folder containing Skin.package files
+		input: Option<PathBuf>,
+		/// Folder to extract hair packages to
+		#[arg(short, long, value_name="FOLDER")]
+		output: Option<PathBuf>
+	},
 	/// Bulk edit GZPS properties in package files
 	EditGZPS {
 		// List of package files to edit
@@ -102,6 +110,9 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		}
 		Some(Command::ExtractHairs{ input, output }) => {
 			extractor::extract_hairs::extract_hairs(input, output)
+		}
+		Some(Command::ExtractMakeup{ input, output }) => {
+			extractor::extract_makeup::extract_makeup(input, output)
 		}
 		Some(Command::EditGZPS{ files, property, value }) => {
 			bulk_edit::edit_gzps(files, &property, &value)

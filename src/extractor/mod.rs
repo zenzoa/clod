@@ -7,6 +7,7 @@ use crate::dbpf::Dbpf;
 
 pub mod extract_outfits;
 pub mod extract_hairs;
+pub mod extract_makeup;
 
 pub fn get_skin_packages(path: &Path) -> Result<Vec<Dbpf>, Box<dyn Error>> {
 	let mut dir_entries: Vec<DirEntry> = fs::read_dir(path)?
