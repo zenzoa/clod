@@ -34,11 +34,7 @@ impl Dbpf {
 	}
 
 	pub fn read(bytes: &[u8], title: &str) -> Result<Dbpf, Box<dyn Error>> {
-		let mut cur = Cursor::new(bytes);
-		let header = Header::read(&mut cur)?;
-		cur.set_position(header.index_offset as u64);
-		let (index_entries, is_compressed) = IndexEntry::read_all(&mut cur, &header)?;
-		let resources = Resource::read_all(&mut cur, &index_entries)?;
+		let (resources, header, is_compressed) = Self::read_resources(bytes)?;
 		let decoded_resources = resources
 			.iter()
 			.map(|r| -> Result<DecodedResource, Box<dyn Error>> { r.decode(title) })
@@ -51,18 +47,32 @@ impl Dbpf {
 		})
 	}
 
+	pub fn read_resources(bytes: &[u8]) -> Result<(Vec<Resource>, Header, bool), Box<dyn Error>> {
+		let mut cur = Cursor::new(bytes);
+		let header = Header::read(&mut cur)?;
+		cur.set_position(header.index_offset as u64);
+		let (index_entries, is_compressed) = IndexEntry::read_all(&mut cur, &header)?;
+		let resources = Resource::read_all(&mut cur, &index_entries)?;
+		Ok((resources, header, is_compressed))
+	}
+
 	pub fn read_from_file(path: &Path, title: &str) -> Result<Dbpf, Box<dyn Error>> {
 		let bytes = fs::read(path)?;
 		Dbpf::read(&bytes, title)
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, compress: Option<bool>) -> Result<(), Box<dyn Error>> {
-		let mut resources = self.resources
+		let resources = self.resources
 			.iter()
 			.map(|r| -> Result<Resource, Box<dyn Error>> { r.to_resource() })
 			.collect::<Result<Vec<Resource>, Box<dyn Error>>>()?;
 
-		if compress.is_some_and(|c| c) || self.is_compressed {
+		let compress = compress.is_some_and(|c| c) || self.is_compressed;
+		Self::write_resources(resources, self.header.clone(), writer, compress)
+	}
+
+	pub fn write_resources(mut resources: Vec<Resource>, mut header: Header, writer: &mut Cursor<Vec<u8>>, compress: bool) -> Result<(), Box<dyn Error>> {
+		if compress {
 			let mut dir_items = Vec::new();
 			for resource in resources.iter_mut() {
 				let uncompressed_size = resource.data.len() as u32;
@@ -76,7 +86,6 @@ impl Dbpf {
 			}
 		}
 
-		let mut header = self.header.clone();
 		header.index_entry_count = resources.len() as u32;
 
 		let mut index_entries = Vec::new();

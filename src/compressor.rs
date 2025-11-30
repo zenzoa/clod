@@ -1,6 +1,6 @@
 use std::error::Error;
-use std::fs;
-use std::io::{ self, Write };
+use std::fs::{ self, File };
+use std::io::{ self, Cursor, Write };
 use std::path::PathBuf;
 
 use crate::dbpf::Dbpf;
@@ -15,11 +15,14 @@ pub fn compress_packages(files: Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
 			fs::copy(&file, file.with_extension("package.bak"))?;
 
 			// read package file
-			let mut package = Dbpf::read_from_file(&file, "")?;
+			let bytes = fs::read(&file)?;
+			let (resources, header, _) = Dbpf::read_resources(&bytes)?;
 
 			// save package file with compression
-			package.is_compressed = true;
-			package.write_to_file(&file)?;
+			let mut cur = Cursor::new(Vec::new());
+			Dbpf::write_resources(resources, header, &mut cur, true)?;
+			let mut new_file = File::create(&file)?;
+			new_file.write_all(&cur.into_inner())?;
 
 			println!(" DONE");
 		}
