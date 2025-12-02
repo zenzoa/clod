@@ -273,7 +273,7 @@ impl Gzps {
 	}
 
 	pub fn generate_key(&self) -> String {
-		let age = Age::stringify(&self.age, true);
+		let age = Age::stringify(&self.age, false, true);
 		let gender = Gender::stringify(&self.gender);
 		let part = Part::stringify(&self.parts);
 		let full_name = self.name.to_string().to_lowercase().trim().to_string();
@@ -290,11 +290,11 @@ impl Gzps {
 			name_without_ep = inner.to_string();
 		}
 
-		format!("{age}{gender}_{part}_{name_without_ep}")
+		format!("{part}_{name_without_ep}_{age}{gender}")
 	}
 
 	pub fn hair_name(&self) -> String {
-		let age = Age::stringify(&self.age, false);
+		let age = Age::stringify(&self.age, false, false);
 		let hairtone = if self.hairtone == HairTone::Other { "".to_string() } else { format!("_{}",self.hairtone.stringify()) };
 		let hidden = if self.flags & 1 > 0 { "_HIDDEN" } else { "" };
 		format!("{}{}{}{}", age, self.hair_group_name(), hairtone, hidden)
@@ -337,6 +337,15 @@ impl Gzps {
 	pub fn max_resource_key(&self) -> u32 {
 		let resource_keys = self.overrides.iter().map(|o| o.resource);
 		resource_keys.max().unwrap_or(0)
+	}
+
+	pub fn make_unisex(&mut self) {
+		if !self.age.contains(&Age::Teen) &&
+			!self.age.contains(&Age::YoungAdult) &&
+			!self.age.contains(&Age::Adult) &&
+			!self.age.contains(&Age::Elder) {
+				self.gender = vec![Gender::Male, Gender::Female];
+		}
 	}
 }
 
@@ -400,6 +409,19 @@ impl Category {
 			categories.remove(i);
 		}
 	}
+
+	pub fn stringify(categories: &[Self]) -> String {
+		let mut category_string = String::new();
+		if categories.contains(&Self::Everyday) { category_string.push('e'); }
+		if categories.contains(&Self::Swimwear) { category_string.push('s'); }
+		if categories.contains(&Self::PJs) { category_string.push('p'); }
+		if categories.contains(&Self::Formal) { category_string.push('f'); }
+		if categories.contains(&Self::Undies) { category_string.push('u'); }
+		if categories.contains(&Self::Maternity) { category_string.push('m'); }
+		if categories.contains(&Self::Athletic) { category_string.push('a'); }
+		if categories.contains(&Self::Outerwear) { category_string.push('o'); }
+		category_string
+	}
 }
 
 #[repr(u32)]
@@ -462,7 +484,7 @@ impl Age {
 		}
 	}
 
-	pub fn stringify(ages: &[Self], combine_adults: bool) -> String {
+	pub fn stringify(ages: &[Self], combine_adults: bool, simple: bool) -> String {
 		let mut age_string = String::new();
 		if ages.contains(&Self::Baby) { age_string.push('b'); }
 		if ages.contains(&Self::Toddler) { age_string.push('p'); }
@@ -470,11 +492,14 @@ impl Age {
 		if ages.contains(&Self::Teen) { age_string.push('t'); }
 		if combine_adults {
 			if ages.contains(&Self::Adult) || ages.contains(&Age::YoungAdult) { age_string.push('a'); }
+		} else if simple {
+			if ages.contains(&Self::Adult) { age_string.push('a'); }
+			else if ages.contains(&Self::YoungAdult) { age_string.push('y'); }
 		} else {
 			if ages.contains(&Self::Adult) { age_string.push('a'); }
 			if ages.contains(&Self::YoungAdult) { age_string.push('y'); }
 		}
-		if ages.contains(&Self::Elder) { age_string.push('e'); }
+		if ages.contains(&Self::Elder) && (!ages.contains(&Self::Adult) || !simple) { age_string.push('e'); }
 		age_string
 	}
 }

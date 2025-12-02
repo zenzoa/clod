@@ -23,7 +23,13 @@ enum Command {
 	/// Generates a default replacement for a TS2 outfit
 	DefaultOutfit {
 		/// Folder containing original outfits, and subfolder(s) containing replacements
-		source: Option<PathBuf>
+		source: Option<PathBuf>,
+		/// Make the default replacement automatically without using the UI
+		#[arg(short, long)]
+		auto: bool,
+		/// Hide pack icon in auto mode
+		#[arg(short = 'p', long)]
+		hide_pack_icon: bool
 	},
 	/// Generates a default replacement for a TS2 outfit
 	DefaultHair {
@@ -99,8 +105,8 @@ enum Command {
 fn main() -> Result<(), Box<dyn Error + 'static>> {
 	let args = Args::parse();
 	match args.command {
-		Some(Command::DefaultOutfit{ source }) => {
-			defaulter::default_outfit::default_outfit(source)
+		Some(Command::DefaultOutfit{ source, auto, hide_pack_icon }) => {
+			defaulter::default_outfit::default_outfit(source, auto, hide_pack_icon)
 		}
 		Some(Command::DefaultHair{ source, output, add_ages, all_categories, visible, townified, hat, hide_pack_icon, same_family }) => {
 			defaulter::default_hair::default_hair(source, output, add_ages, all_categories, visible, townified, hat, hide_pack_icon, same_family)

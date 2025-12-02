@@ -75,7 +75,7 @@ pub fn default_hair(
 					println!("Replacing {}", gzps.title);
 					pairings[i] = Some(j);
 					for age in &gzps.age {
-						age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false), gzps.hairtone.stringify()));
+						age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false, false), gzps.hairtone.stringify()));
 					}
 			}
 		}
@@ -91,7 +91,7 @@ pub fn default_hair(
 			if !pairings.contains(&Some(j)) && gender.is_none_or(|g| hair.gzps.gender.contains(&g)) {
 				let mut ages_to_add = Vec::new();
 				for age in &hair.gzps.age {
-					let age_color = format!("{}_{}", Age::stringify(&[*age], false), hair.gzps.hairtone.stringify());
+					let age_color = format!("{}_{}", Age::stringify(&[*age], false, false), hair.gzps.hairtone.stringify());
 					if !age_color_sets.contains(&age_color) && (*age != Age::YoungAdult || separate_youngadult) {
 						ages_to_add.push(*age);
 						age_color_sets.push(age_color.clone());

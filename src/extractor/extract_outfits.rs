@@ -2,13 +2,14 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
-use crate::dbpf::{ Dbpf, TypeId };
+use crate::dbpf::Dbpf;
 use crate::dbpf::resource::DecodedResource;
 use crate::dbpf::resource_types::gzps::{ Gzps, Category, Part };
 use crate::dbpf::resource_types::idr::Idr;
 
-use super::get_skin_packages;
+use super::{ get_skin_packages, create_folder };
 
+#[derive(Clone)]
 struct OriginalOutfit {
 	gzps: Gzps,
 	idr: Option<Idr>
@@ -18,53 +19,47 @@ pub fn extract_outfits(input_path: Option<PathBuf>, output_path: Option<PathBuf>
 	let input_path = input_path.unwrap_or(PathBuf::from("./"));
 	let output_path = output_path.unwrap_or(input_path.clone());
 
+	print!("Reading Skin.package files...");
 	let packages = get_skin_packages(&input_path)?;
 	let outfits = get_outfits(&packages);
+	println!("DONE");
 
-	let mut outfit_groups: HashMap<String, Vec<DecodedResource>> = HashMap::new();
-
+	let mut outfit_groups: HashMap<String, Vec<&OriginalOutfit>> = HashMap::new();
 	for outfit in outfits.values() {
 		if outfit.gzps.species == 1 &&
 			!outfit.gzps.category.contains(&Category::Skin) &&
 			!outfit.gzps.category.contains(&Category::TryOn) &&
 			!outfit.gzps.category.contains(&Category::Overlay) &&
 			outfit.gzps.parts.len() == 1 &&
+			!outfit.gzps.name.to_string().contains("fried") &&
 			(outfit.gzps.parts[0] == Part::Body || outfit.gzps.parts[0] == Part::Top || outfit.gzps.parts[0] == Part::Bottom) {
-				sort_into_group(outfit, &mut outfit_groups, &outfit.gzps.generate_key());
+				let group_name = outfit.gzps.generate_key();
+				if let Some(group) = outfit_groups.get_mut(&group_name) {
+					group.extend_from_slice(&[outfit]);
+				} else {
+					outfit_groups.insert(group_name, vec![outfit]);
+				}
 		}
 	}
 
-	let mut outfit_group_names: Vec<&String> = outfit_groups.keys().collect();
-	outfit_group_names.sort();
-
-	for name in outfit_group_names {
-		if let Some(resources) = outfit_groups.get(name) {
-			let count = resources.iter().filter(|r| r.get_id().type_id == TypeId::Gzps).count();
-			let mut file_path = output_path.to_path_buf();
-			file_path.push(format!("{name}_{count}.package"));
-			Dbpf::write_package_file(resources, &file_path, false)?;
-		}
-	}
-
-	Ok(())
-}
-
-fn sort_into_group(outfit: &OriginalOutfit, groups: &mut HashMap<String, Vec<DecodedResource>>, group_name: &str) {
-	match groups.get_mut(group_name) {
-		Some(resources) => {
-			resources.push(DecodedResource::Gzps(outfit.gzps.clone()));
+	for (group_name, outfits) in outfit_groups {
+		print!("Extracting {group_name}...");
+		let folder_name = format!("{group_name}_{}", outfits.len());
+		let folder_path = create_folder(&output_path, &folder_name)?;
+		for outfit in outfits {
+			let mut resources = vec![DecodedResource::Gzps(outfit.gzps.clone())];
 			if let Some(idr) = &outfit.idr {
 				resources.push(DecodedResource::Idr(idr.clone()));
 			}
-		},
-		None => {
-			let mut resources = vec![DecodedResource::Gzps(outfit.gzps.clone())];
-			if let Some(idr) = &outfit.idr {
-				resources.push(DecodedResource::Idr(idr.clone()))
-			}
-			groups.insert(group_name.to_string(), resources);
+			let hidden = if outfit.gzps.flags & 1 > 0 { "_hidden" } else { "" };
+			let file_name = format!("{}_{}{}", outfit.gzps.name, Category::stringify(&outfit.gzps.category), hidden);
+			let file_path = folder_path.join(file_name).with_extension("package");
+			Dbpf::write_package_file(&resources, &file_path, false)?;
 		}
+		println!("DONE");
 	}
+
+	Ok(())
 }
 
 fn get_outfits(packages: &[Dbpf]) -> HashMap<String, OriginalOutfit> {

@@ -19,7 +19,10 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 	let input_path = input_path.unwrap_or(PathBuf::from("./"));
 	let output_path = output_path.unwrap_or(input_path.clone());
 
+	print!("Reading Skin.package files...");
 	let all_hairs = get_hairs(&input_path)?;
+	println!("DONE");
+
 	let mut hairs_by_family: HashMap<String, Vec<Hair>> = HashMap::new();
 	for (_, hair) in all_hairs {
 		let family = hair.gzps.family.to_string();

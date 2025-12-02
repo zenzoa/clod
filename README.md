@@ -13,7 +13,7 @@ Command Line Outfit Defaulter (and multi-tool) for The Sims 2
 - CLOD will create one folder per hair family, except where a single hair (like `fhairaline`) uses a different family for each age (in which case it combines them in one folder). Hairs that are normally hidden will have `HIDDEN` in the file name, and hairs that include duplicate ages (like young adult clones when the adult version is enabled for young adults) are disabled with a `.off` extension.
 - Hats usually have two sets of hair files: one for the hat itself, and one for the hatless state. The hatless files are hidden clones that link to the meshes and textures of other hairs in the game. Because it's common to replace hats with regular hair, CLOD disables the hatless files with a `.off` extension (except when a particular age doesn't have a companion hat file). If you want to replace the hatless hairs separately, move them into their own folder and remove the `.off` extensions.
 
-## Create TS2 Clothing Default Replacements
+## Create TS2 Clothing Default Replacements (UI)
 
 ### Step 1: Setup Your Files
 - Create a folder that contains the original outfits. That is, the `.package` file(s) containing the the 3IDR + GZPS resources for the outfits you want to replace.
@@ -63,6 +63,34 @@ You can navigate CLOD with the mouse or with the keyboard (use arrow keys to nav
 - Place this file in your TS2 Downloads folder, and launch TS2 to test your default replacement.
 - To update the thumbnails, remove `[TS2 Documents folder]/Thumbnails/CASThumbnails.package`.
 
+## Create TS2 Clothing Default Replacements (Auto)
+
+### Step 1: Setup Your Files
+- Same as above.
+
+### Step 2: Create Properties File
+- Create an empty file in the folder with the original outfits, and give it the extention `.properties`. This could just be a renamed text file, for example - CLOD won't read the file contents, just the file name.
+- The name of the file should consist of a series of tags, eg. `unisex_everyday_formal_notownies.properties`. Here are the tags you can use:
+	- `unisex`: Enable for both genders, if the outfit is for babies, toddlers, and children. If absent, use the original genders.
+	- `hidden`: Hide in CAS. If absent, show in CAS.
+	- `notownies`: Disable for townies. If absent, enable for townies.
+	- `everyday` or `casual`: Enable in everyday category. If absent, disable in that category.
+	- `swim`: Enable in swimwear category. If absent, disable in that category.
+	- `sleep` or `pjs`: Enable in sleepwear category. If absent, disable in that category.
+	- `formal` or `fancy`: Enable in formalwear category. If absent, disable in that category.
+	- `underwear` or `undies`: Enable in underwear category. If absent, disable in that category.
+	- `maternity` or `pregnant`: Enable in maternity category. If absent, disable in that category.
+	- `active` or `athletic`: Enable in activewear category. If absent, disable in that category.
+	- `outerwear`: Enable in outerwear category. If absent, disable in that category.
+- If there is no properties file in the folder, CLOD will just use the default properties.
+
+### Step 3: Launch CLOD
+- Open a terminal
+- Launch CLOD with the path to the folder containing your outfits with the `-a/--auto` parameter. For example: `clod default-outfit ./witches -a`
+- You can remove the pack icon from CAS by setting the `product` setting to 1 with the `-p/--hide-pack-icon` parameter:  `clod default-outfit ./witches -ap`
+- The default replacements will be saved to the same folder using the name of the folder for the filename. For example: `witches_DEFAULT.package`
+- Any extra clothes not used in the default replacement will be placed in a `_EXTRAS` file containing decustomized outfits repo'd to the default replacements. For example: `witches_EXTRAS.package`
+
 ## Create TS2 Hair Default Replacements
 
 ### Step 1: Setup Your Files
@@ -94,7 +122,7 @@ You can navigate CLOD with the mouse or with the keyboard (use arrow keys to nav
 
 ### Step 2: Launch CLOD
 - Open a terminal
-- Launch CLOD with the path to the folder containing your outfits. For example: `clod default-hair ./fhair_poofs`.
+- Launch CLOD with the path to the folder containing your hairs. For example: `clod default-hair ./fhair_poofs`.
 - By default this will automatically replace each hair file in the main with a matching age/color from the replacement subfolder, and save the output to `./fhair_poofs/fhair_poofs_DEFAULT.package`.
 - You can specify a different path for the output with the `-o/--output` parameter: `clod default-hair ./fhair_poofs -o ./mypoofsdefault.package`
 - If the replacement hair has more ages than the original, you can add those extra ages as decustomized and linked with the `-a/--add-ages` parameter: `clod default-hair ./fhair_poofs -a`

@@ -1,5 +1,6 @@
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{ Path, PathBuf };
+use std::fs;
 
 use cursive::{ Cursive, With };
 use cursive::view::{ Nameable, Scrollable, Resizable };
@@ -14,17 +15,117 @@ use crate::outfit::Outfit;
 use super::{ get_default_replacement_files, extract_resources, extract_gzps, default_output_path };
 
 #[derive(Clone, Default)]
+struct GzpsSettings {
+	hide_pack_icon: bool,
+	unisex: bool,
+	hidden: Option<bool>,
+	notownies: Option<bool>,
+	categories: Option<Vec<Category>>
+}
+
+impl GzpsSettings {
+	fn new(hide_pack_icon: bool) -> Self {
+		Self {
+			hide_pack_icon,
+			..Default::default()
+		}
+	}
+
+	fn from_string(hide_pack_icon: bool, s: &str) -> Self {
+		let mut categories = Vec::new();
+		if s.contains("everyday") || s.contains("casual") {
+			categories.push(Category::Everyday);
+		}
+		if s.contains("swim") {
+			categories.push(Category::Swimwear);
+		}
+		if s.contains("sleep") || s.contains("pajama") || s.contains("pjs") {
+			categories.push(Category::PJs);
+		}
+		if s.contains("formal") || s.contains("fancy") {
+			categories.push(Category::Formal);
+		}
+		if s.contains("underwear") || s.contains("undies") {
+			categories.push(Category::Undies);
+		}
+		if s.contains("maternity") || s.contains("pregnant") {
+			categories.push(Category::Maternity);
+		}
+		if s.contains("active") || s.contains("athletic") || s.contains("gym") {
+			categories.push(Category::Athletic);
+		}
+		if s.contains("outerwear") {
+			categories.push(Category::Outerwear);
+		}
+		Self {
+			hide_pack_icon,
+			unisex: s.contains("unisex"),
+			hidden: Some(s.contains("hidden")),
+			notownies: Some(s.contains("notownies")),
+			categories: Some(categories)
+		}
+	}
+
+	fn apply(&self, gzps: &mut Gzps) {
+		// set product to Base Game to remove pack icon
+		if self.hide_pack_icon {
+			gzps.product = Some(1);
+		}
+
+		// enable for all genders (if baby, toddler, or child)
+		if self.unisex {
+			gzps.make_unisex();
+		}
+
+		// enable for young adult + adult
+		if gzps.age.contains(&Age::YoungAdult) && !gzps.age.contains(&Age::Adult) {
+			gzps.age.push(Age::Adult);
+		} else if gzps.age.contains(&Age::Adult) && !gzps.age.contains(&Age::YoungAdult) {
+			gzps.age.push(Age::YoungAdult);
+		}
+
+		// set hidden/visible in CAS
+		if let Some(hidden) = self.hidden {
+			if hidden && gzps.flags & 1 == 0 {
+				gzps.flags += 1;
+			} else if !hidden && gzps.flags & 1 > 0 {
+				gzps.flags -= 1;
+			}
+		}
+
+		// set enabled/disabled for townies
+		if let Some(notownies) = self.notownies {
+			if notownies && gzps.flags & 8 == 0 {
+				gzps.flags += 8;
+			} else if !notownies && gzps.flags & 8 > 0 {
+				gzps.flags -= 8;
+			}
+		}
+
+		// set categories
+		if let Some(categories) = &self.categories {
+			gzps.category = categories.clone();
+		}
+	}
+}
+
+#[derive(Clone, Default)]
 struct SivData {
 	source_dir: PathBuf,
+	gzps_settings: GzpsSettings,
 	gzps_list: Vec<Gzps>,
 	outfits: Vec<Outfit>,
 	pairings: Vec<Option<usize>>
 }
 
-pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
+pub fn default_outfit(source: Option<PathBuf>, auto: bool, hide_pack_icon: bool) -> Result<(), Box<dyn Error>> {
 	let source_dir = source.unwrap_or(PathBuf::from("./"));
 
+	print!("Reading files...");
 	let (original_files, replacement_files) = get_default_replacement_files(&source_dir)?;
+	println!("DONE");
+
+	print!("Extracting resources...");
 
 	// get all GZPS resources in original package(s)
 	let gzps_list = extract_gzps(&original_files)?;
@@ -61,14 +162,46 @@ pub fn default_outfit(source: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 		pairing
 	}).collect();
 
-	let mut siv = cursive::default();
+	// look for property override file
+	let mut gzps_settings = GzpsSettings::new(hide_pack_icon);
+	for entry in (fs::read_dir(&source_dir)?).flatten() {
+		let entry_path = entry.path();
+		if entry_path.is_file() && entry_path.extension().is_some_and(|ext| ext == "properties") {
+			if let Some(prop_string) = entry_path.file_stem() {
+				gzps_settings = GzpsSettings::from_string(hide_pack_icon, &prop_string.to_string_lossy());
+			}
+		}
+	}
+
+	println!("DONE");
 
 	let data = SivData {
 		source_dir,
+		gzps_settings,
 		gzps_list,
 		outfits,
 		pairings
 	};
+
+	if auto {
+		print!("Saving default replacement...");
+		let output_path = default_output_path(&data.source_dir, "DEFAULT");
+		let resources = save_default(&data, &output_path, true)?;
+		println!("DONE");
+
+		print!("Saving extras...");
+		save_extras(&data, &resources)?;
+		println!("DONE");
+
+		Ok(())
+
+	} else {
+		run_ui(data)
+	}
+}
+
+fn run_ui(data: SivData) -> Result<(), Box<dyn Error>> {
+	let mut siv = cursive::default();
 	siv.set_user_data(data.clone());
 
 	siv.add_global_callback('q', |s| s.quit());
@@ -361,110 +494,30 @@ fn save_package(s: &mut Cursive) {
 	let output_path = PathBuf::from(filename.as_str());
 
 	let compress = s.find_name::<Checkbox>("compress").unwrap().is_checked();
-	let product_fix = s.find_name::<Checkbox>("product_fix").unwrap().is_checked();
+	let hide_pack_icon = s.find_name::<Checkbox>("product_fix").unwrap().is_checked();
 	let add_extras = s.find_name::<Checkbox>("add_extras").unwrap().is_checked();
 
-	let mut resources = Vec::new();
-
-	let mut add_extras_result = None;
+	let mut save_result = Ok(());
+	let mut save_extras_result = None;
 
 	s.with_user_data(|data: &mut SivData| {
-		let mut new_outfits = Vec::new();
+		data.gzps_settings.hide_pack_icon = hide_pack_icon;
 
-		let mut text_lists: Vec<TextList> = Vec::new();
-
-		for (i, outfit_index) in data.pairings.iter().enumerate() {
-			if let Some(j) = *outfit_index {
-				let mut new_gzps = data.gzps_list[i].clone();
-				let mut new_outfit = data.outfits[j].clone();
-
-				// copy over shoe/overrides from replacement to original GZPS
-				new_gzps.shoe = new_outfit.gzps.shoe;
-				new_gzps.overrides = new_outfit.gzps.overrides.clone();
-
-				// enable for young adult + adult
-				if new_gzps.age.contains(&Age::YoungAdult) && !new_gzps.age.contains(&Age::Adult) {
-					new_gzps.age.push(Age::Adult);
-				} else if new_gzps.age.contains(&Age::Adult) && !new_gzps.age.contains(&Age::YoungAdult) {
-					new_gzps.age.push(Age::YoungAdult);
+		match save_default(data, &output_path, compress) {
+			Ok(resources) => {
+				save_result = Ok(());
+				if add_extras {
+					save_extras_result = Some(save_extras(data, &resources));
 				}
-
-				// set product to Base Game to remove pack icon
-				if product_fix {
-					new_gzps.product = Some(1);
-				}
-
-				// update 3IDR's TGIR to match GZPS's TGIR
-				new_outfit.idr.id.group_id = new_gzps.id.group_id;
-				new_outfit.idr.id.instance_id = new_gzps.id.instance_id;
-				new_outfit.idr.id.resource_id = new_gzps.id.resource_id;
-
-				// make young adult clones visible in catalog
-				let outfit_name = new_gzps.name.to_string().to_lowercase();
-				if outfit_name.starts_with('y') && outfit_name.contains("clone") {
-					// create a STR# if none exists with this outfit's group id
-					let text_list_id = Identifier::new(u32::from(TypeId::TextList), new_gzps.id.group_id, 0x1, 0);
-					if !text_lists.iter().any(|t| t.id.group_id == new_gzps.id.group_id) {
-						text_lists.push(TextList::create_empty(text_list_id.clone()));
-					}
-
-					// create BINX resource
-					new_outfit.generate_binx();
-
-					// add additional references to 3IDR
-					new_outfit.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
-					new_outfit.idr.str_ref = Some(text_list_id.clone());
-					new_outfit.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0x0FFE0080, 0));
-					new_outfit.idr.gzps_ref = Some(new_gzps.id.clone());
-
-				} else {
-					// if not adding BINX, remove unnecessary 3IDR properties
-					new_outfit.idr.ui_ref = None;
-					new_outfit.idr.str_ref = None;
-					new_outfit.idr.coll_ref = None;
-					new_outfit.idr.gzps_ref = None;
-				}
-
-				// copy new GZPS back to outfit
-				new_outfit.gzps = new_gzps;
-
-				// add outfit to list
-				new_outfits.push(new_outfit);
 			}
-		}
-
-		// pull all resources together
-		resources = new_outfits
-			.iter()
-			.flat_map(|o| o.get_resources())
-			.collect::<Vec<DecodedResource>>();
-
-		// add any STR# resources that were made
-		let text_list_resources = text_lists
-			.iter()
-			.map(|t| DecodedResource::TextList(t.clone()))
-			.collect::<Vec<DecodedResource>>();
-		resources.extend_from_slice(&text_list_resources);
-
-		// get all outfits not assigned to be a default replacement
-		if add_extras {
-			let mut extra_outfits: Vec<&mut Outfit> = data.outfits.iter_mut().enumerate().filter(|(i, _)| {
-				!data.pairings.iter().any(|p| p.is_some_and(|j| j == *i))
-			}).map(|(_, outfit)| outfit).collect();
-			let extra_resources: Vec<DecodedResource> = get_outfit_resources(&mut extra_outfits, product_fix)
-				.into_iter()
-				.filter(|r| !resources.iter().any(|r2| r2.get_id() == r.get_id()))
-				.collect();
-			if !extra_resources.is_empty() {
-				let extra_path = default_output_path(&data.source_dir, "EXTRAS");
-				add_extras_result = Some(Dbpf::write_package_file(&extra_resources, &extra_path, compress));
+			Err(why) => {
+				save_result = Err(why);
 			}
 		}
 	});
 
-	// save package file
-	let save_result = Dbpf::write_package_file(&resources, &output_path, compress);
-	match (save_result, add_extras_result) {
+	// share the result
+	match (save_result, save_extras_result) {
 		(Ok(_), None) | (Ok(_), Some(Ok(_))) => {
 			s.add_layer(Dialog::around(TextView::new("Success!"))
 				.button("Ok", |s| s.quit()));
@@ -484,10 +537,88 @@ fn save_package(s: &mut Cursive) {
 	}
 }
 
-fn get_outfit_resources(outfits: &mut [&mut Outfit], product_fix: bool) -> Vec<DecodedResource> {
+fn save_default(data: &SivData, output_path: &Path, compress: bool) -> Result<Vec<DecodedResource>, Box<dyn Error>> {
+	let mut new_outfits = Vec::new();
 	let mut text_lists: Vec<TextList> = Vec::new();
 
-	for outfit in outfits.iter_mut() {
+	for (i, outfit_index) in data.pairings.iter().enumerate() {
+		if let Some(j) = *outfit_index {
+			let mut new_gzps = data.gzps_list[i].clone();
+			let mut new_outfit = data.outfits[j].clone();
+
+			// copy over shoe/overrides from replacement to original GZPS
+			new_gzps.shoe = new_outfit.gzps.shoe;
+			new_gzps.overrides = new_outfit.gzps.overrides.clone();
+
+			// apply settings
+			data.gzps_settings.apply(&mut new_gzps);
+
+			// update 3IDR's TGIR to match GZPS's TGIR
+			new_outfit.idr.id.group_id = new_gzps.id.group_id;
+			new_outfit.idr.id.instance_id = new_gzps.id.instance_id;
+			new_outfit.idr.id.resource_id = new_gzps.id.resource_id;
+
+			// make young adult clones visible in catalog
+			let outfit_name = new_gzps.name.to_string().to_lowercase();
+			if outfit_name.starts_with('y') && outfit_name.contains("clone") {
+				// create a STR# if none exists with this outfit's group id
+				let text_list_id = Identifier::new(u32::from(TypeId::TextList), new_gzps.id.group_id, 0x1, 0);
+				if !text_lists.iter().any(|t| t.id.group_id == new_gzps.id.group_id) {
+					text_lists.push(TextList::create_empty(text_list_id.clone()));
+				}
+
+				// create BINX resource
+				new_outfit.generate_binx();
+
+				// add additional references to 3IDR
+				new_outfit.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
+				new_outfit.idr.str_ref = Some(text_list_id.clone());
+				new_outfit.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0x0FFE0080, 0));
+				new_outfit.idr.gzps_ref = Some(new_gzps.id.clone());
+
+			} else {
+				// if not adding BINX, remove unnecessary 3IDR properties
+				new_outfit.idr.ui_ref = None;
+				new_outfit.idr.str_ref = None;
+				new_outfit.idr.coll_ref = None;
+				new_outfit.idr.gzps_ref = None;
+			}
+
+			// copy new GZPS back to outfit
+			new_outfit.gzps = new_gzps;
+
+			// add outfit to list
+			new_outfits.push(new_outfit);
+		}
+	}
+
+	// pull all resources together
+	let mut resources = new_outfits
+		.iter()
+		.flat_map(|o| o.get_resources())
+		.collect::<Vec<DecodedResource>>();
+
+	// add any STR# resources that were made
+	let text_list_resources = text_lists
+		.iter()
+		.map(|t| DecodedResource::TextList(t.clone()))
+		.collect::<Vec<DecodedResource>>();
+	resources.extend_from_slice(&text_list_resources);
+
+	Dbpf::write_package_file(&resources, &output_path, compress)?;
+
+	Ok(resources)
+}
+
+fn save_extras(data: &SivData, resources: &[DecodedResource]) -> Result<(), Box<dyn Error>> {
+	let mut extra_outfits: Vec<Outfit> = data.outfits.iter().enumerate()
+		.filter(|(i, _)| !data.pairings.iter().any(|p| p.is_some_and(|j| j == *i)))
+		.map(|(_, outfit)| outfit.clone())
+		.collect();
+
+	let mut text_lists: Vec<TextList> = Vec::new();
+
+	for outfit in extra_outfits.iter_mut() {
 		// create a STR# if none exists with this outfit's group id
 		let text_list_id = Identifier::new(u32::from(TypeId::TextList), outfit.gzps.id.group_id, 0x1, 0);
 		if !text_lists.iter().any(|t| t.id.group_id == outfit.gzps.id.group_id) {
@@ -497,24 +628,15 @@ fn get_outfit_resources(outfits: &mut [&mut Outfit], product_fix: bool) -> Vec<D
 		// decustomize
 		outfit.gzps.creator = PascalString::new("00000000-0000-0000-0000-000000000000");
 
-		// enable for young adult + adult
-		if outfit.gzps.age.contains(&Age::YoungAdult) && !outfit.gzps.age.contains(&Age::Adult) {
-			outfit.gzps.age.push(Age::Adult);
-		} else if outfit.gzps.age.contains(&Age::Adult) && !outfit.gzps.age.contains(&Age::YoungAdult) {
-			outfit.gzps.age.push(Age::YoungAdult);
-		}
-
-		// set product to Base Game to remove pack icon
-		if product_fix {
-			outfit.gzps.product = Some(1);
-		}
+		// apply settings
+		data.gzps_settings.apply(&mut outfit.gzps);
 
 		// create BINX resource
 		outfit.generate_binx();
 	}
 
 	// collect resources together
-	let mut resources: Vec<DecodedResource> = outfits.iter().flat_map(|outfit| {
+	let mut extra_resources: Vec<DecodedResource> = extra_outfits.iter().flat_map(|outfit| {
 		outfit.get_resources()
 	}).collect();
 
@@ -523,7 +645,18 @@ fn get_outfit_resources(outfits: &mut [&mut Outfit], product_fix: bool) -> Vec<D
 		.iter()
 		.map(|t| DecodedResource::TextList(t.clone()))
 		.collect::<Vec<DecodedResource>>();
-	resources.extend_from_slice(&text_list_resources);
+	extra_resources.extend_from_slice(&text_list_resources);
 
-	resources
+	// remove dupes
+	extra_resources = extra_resources.into_iter()
+		.filter(|r| !resources.iter().any(|r2| r2.get_id() == r.get_id()))
+		.collect();
+
+	// save package
+	if !extra_resources.is_empty() {
+		let extra_path = default_output_path(&data.source_dir, "EXTRAS");
+		Dbpf::write_package_file(&extra_resources, &extra_path, true)?;
+	}
+
+	Ok(())
 }

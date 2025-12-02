@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fs;
 use std::path::{ Path, PathBuf };
-use std::ffi::OsString;
 
 use crate::dbpf::Dbpf;
 use crate::dbpf::resource::DecodedResource;
@@ -15,12 +14,12 @@ pub fn get_default_replacement_files(source_dir: &Path) -> Result<(Vec<PathBuf>,
 	let mut replacement_files = Vec::new();
 	for entry in (fs::read_dir(source_dir)?).flatten() {
 		let entry_path = entry.path();
-		if entry_path.is_file() && entry_path.extension().unwrap_or(&OsString::new()) == "package" {
+		if entry_path.is_file() && entry_path.extension().is_some_and(|ext| ext == "package") {
 			original_files.push(entry_path);
 		} else if entry_path.is_dir() {
 			for subentry in (fs::read_dir(entry_path)?).flatten() {
 				let subentry_path = subentry.path();
-				if subentry_path.is_file() && subentry_path.extension().unwrap_or(&OsString::new()) == "package" {
+				if subentry_path.is_file() && subentry_path.extension().is_some_and(|ext| ext == "package") {
 					replacement_files.push(subentry_path);
 				}
 			}
