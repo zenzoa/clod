@@ -10,6 +10,7 @@ mod defaulter;
 mod extractor;
 mod compressor;
 mod bulk_edit;
+mod recolor;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -86,7 +87,7 @@ enum Command {
 	},
 	/// Bulk edit GZPS properties in package files
 	EditGZPS {
-		// List of package files to edit
+		/// List of package files to edit
 		files: Vec<PathBuf>,
 		/// GZPS property name
 		#[arg(short, long)]
@@ -99,6 +100,20 @@ enum Command {
 	Compress {
 		/// List of package files to compress
 		files: Vec<PathBuf>
+	},
+	/// Create one or more outfit recolors
+	RecolorOutfit {
+		/// One recolor package per desired age+gender to use as template
+		files: Vec<PathBuf>,
+		/// Title for recolors
+		#[arg(short, long)]
+		title: Option<String>,
+		/// Number of new recolor packages to make
+		#[arg(short, long)]
+		number: Option<usize>,
+		/// Repository recolors to first age+gender
+		#[arg(short, long)]
+		repo: bool
 	}
 }
 
@@ -125,6 +140,9 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		}
 		Some(Command::Compress{ files }) => {
 			compressor::compress_packages(files)
+		}
+		Some(Command::RecolorOutfit{ files, title, number, repo }) => {
+			recolor::recolor_outfit(files, title, number, repo)
 		}
 		None => Err("No command given.".into())
 	}

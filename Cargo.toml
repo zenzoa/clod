@@ -1,6 +1,6 @@
 [package]
 name = "clod"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 
 [dependencies]
@@ -11,3 +11,4 @@ clap = { version = "4.5.47", features = ["derive"] }
 refpack = "5.0.2"
 regex = "1.11"
 crc-any = "2.5"
+rand = "0.9"

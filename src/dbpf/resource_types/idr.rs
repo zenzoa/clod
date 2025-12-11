@@ -118,4 +118,19 @@ impl Idr {
 
 		Ok(cur.into_inner())
 	}
+
+	pub fn replace_guid(&self, new_guid: u32) -> Self {
+		let mut new_idr = self.clone();
+		new_idr.id.group_id = new_guid;
+		for txmt_ref in new_idr.txmt_refs.iter_mut() {
+			txmt_ref.group_id = new_guid;
+		}
+		if let Some(str_ref) = &mut new_idr.str_ref {
+			str_ref.group_id = new_guid;
+		}
+		if let Some(gzps_ref) = &mut new_idr.gzps_ref {
+			gzps_ref.group_id = new_guid;
+		}
+		new_idr
+	}
 }

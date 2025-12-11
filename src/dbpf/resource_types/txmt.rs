@@ -48,12 +48,30 @@ impl Txmt {
 		rcol.write(&mut cur)?;
 		Ok(cur.into_inner())
 	}
+
+	pub fn replace_guid(&self, new_guid: u32) -> Self {
+		let old_guid_str = format!("{:x}", self.id.group_id);
+		let new_guid_str = format!("{:x}", new_guid);
+		let mut new_txmt = self.clone();
+		new_txmt.id.group_id = new_guid;
+		new_txmt.block.file_name = new_txmt.block.file_name.replace(&old_guid_str, &new_guid_str);
+		new_txmt.block.material_description = new_txmt.block.material_description.replace(&old_guid_str, &new_guid_str);
+		for prop in new_txmt.block.properties.iter_mut() {
+			match prop.name.to_string().as_str() {
+				"stdMatBaseTextureName" | "stdMatNormalMapTextureName" | "stdMatEnvCubeTextureName" => {
+					prop.value = prop.value.replace(&old_guid_str, &new_guid_str);
+				}
+				_ => {}
+			}
+		}
+		new_txmt
+	}
 }
 
 #[derive(Clone)]
 pub struct TxmtProperty {
-	name: SevenBitString,
-	value: SevenBitString
+	pub name: SevenBitString,
+	pub value: SevenBitString
 }
 
 #[derive(Clone)]

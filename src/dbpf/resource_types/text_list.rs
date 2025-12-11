@@ -68,7 +68,6 @@ impl TextList {
 					description: "".to_string()
 				}
 			]
-
 		}
 	}
 }

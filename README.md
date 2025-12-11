@@ -134,8 +134,16 @@ You can navigate CLOD with the mouse or with the keyboard (use arrow keys to nav
 \* Note on hats: If you want sims to revert to another default replacement when they remove the hat, you'll have to link the hatless hidden clones manually. But if you're replacing one of the original hats with a regular hair and don't want the sim to remove it, you can just turn off the hat flag and ignore the hatless hidden clones.
 
 ## Compress TS2 Package Files
+WARNING: Highly experimental!
 - Open a terminal and navigate to the folder containing the package file(s) you want to compress.
 - To compress one file, run CLOD like this: `clod compress [filename]`
 - To compress multiple files, run CLOD like this: `clod compress [filename1] [filename2] [filename3]`
 - To compress all package files in the folder, run CLOD like this: `clod compress *.package`
 - The original file will be backed up with the extension `.package.bak`.
+
+## Create TS2 Outfit Recolors
+- Open a terminal and navigate to the folder containing the outfit package file(s) you want to recolor.
+- Launch CLOD with the file name of one of the existing recolors, which will be used as a template. Use the `-t/--title` parameter to give your recolors a name, and the `-n/--number` to tell CLOD how many new recolors to make. For example: `clod recolor-outfit ./SalemAF_black.package -n 3 -t "my_Salem"` will generate the files my_SalemAF_01.package, my_SalemAF_02.package, and my_SalemAF_03.package.
+- You can make recolors for multiple ages at once by specifying multiple file names. For example: `clod recolor-outfit ./SalemAF_black.package ./SalemTF_black.package ./SalemEF_black.package -n 1 -t "my_Salem"` will generate the files my_SalemAF_01.package, my_SalemTF_01.package, and my_SalemEF_01.package.
+- To make the additional recolors repositoried to the first set, use the `-r/--repo` parameter. For example: `clod recolor-outfit ./SalemAF_black.package ./SalemTF_black.package ./SalemEF_black.package -n 1 -t "my_Salem" -r` will generate the files my_SalemAF_01.package, my_SalemTF_01_REPO.package, and my_SalemEF_01_REPO.package.
+- You will still need to replace the textures in an external program, like YAPE or SimPE.

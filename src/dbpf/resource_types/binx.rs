@@ -13,7 +13,7 @@ pub struct Binx {
 	pub bin_idx: u32,
 	pub object_idx: u32,
 	pub creator_id: PascalString,
-	pub sort_index: u32,
+	pub sort_index: i32,
 	pub string_index: u32
 }
 
@@ -51,7 +51,7 @@ impl Binx {
 			PascalString::new("00000000-0000-0000-0000-000000000000")
 		};
 
-		let sort_index = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("sortindex") {
+		let sort_index = if let Some(PropertyValue::Int(v)) = cpf.get_prop("sortindex") {
 			*v
 		} else {
 			0
@@ -87,7 +87,7 @@ impl Binx {
 				("binidx".to_string(), PropertyValue::Uint(self.bin_idx)),
 				("objectidx".to_string(), PropertyValue::Uint(self.object_idx)),
 				("creatorid".to_string(), PropertyValue::String(self.creator_id.clone())),
-				("sortindex".to_string(), PropertyValue::Uint(self.sort_index)),
+				("sortindex".to_string(), PropertyValue::Int(self.sort_index)),
 				("stringindex".to_string(), PropertyValue::Uint(self.string_index))
 			]
 		};

@@ -352,6 +352,10 @@ impl SevenBitString {
 		writer.write_all(&self.0)?;
 		Ok(())
 	}
+
+	pub fn replace(&self, old: &str, new: &str) -> Self {
+		Self::new(&self.to_string().replace(&old, &new))
+	}
 }
 
 #[derive(Clone, Default, PartialEq)]

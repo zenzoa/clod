@@ -3,6 +3,9 @@ use std::io::{ Cursor, Read };
 
 use binrw::{ BinRead, BinWrite };
 
+use regex::Regex;
+
+use crate::crc::{ hash_crc24, hash_crc32 };
 use crate::dbpf::{ Identifier, TypeId, SevenBitString, PascalString };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
@@ -39,13 +42,27 @@ impl Txtr {
 		rcol.write(&mut cur)?;
 		Ok(cur.into_inner())
 	}
+
+	pub fn replace_guid(&self, new_guid: u32) -> Self {
+		let old_guid_str = format!("{:x}", self.id.group_id);
+		let new_guid_str = format!("{:x}", new_guid);
+		let mut new_txtr = self.clone();
+		new_txtr.id.group_id = new_guid;
+		new_txtr.block.file_name = new_txtr.block.file_name.replace(&old_guid_str, &new_guid_str);
+		let re = Regex::new(r"^##0x([0-9,a-f,A-F]+)!(.+)$").unwrap();
+		if let Some(captures) = re.captures(&new_txtr.block.file_name.to_string()) {
+			new_txtr.id.instance_id = hash_crc24(&captures[2]);
+			new_txtr.id.resource_id = hash_crc32(&captures[2]);
+		}
+		new_txtr
+	}
 }
 
 #[derive(Clone)]
 pub struct TxtrBlock {
-	version: u32,
-	file_name: SevenBitString,
-	remaining_data: Vec<u8>
+	pub version: u32,
+	pub file_name: SevenBitString,
+	pub remaining_data: Vec<u8>
 }
 
 impl TxtrBlock {

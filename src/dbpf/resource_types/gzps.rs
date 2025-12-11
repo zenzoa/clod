@@ -272,6 +272,12 @@ impl Gzps {
 		Ok(())
 	}
 
+	pub fn age_gender_string(&self) -> String {
+		let age = Age::stringify(&self.age, true, true);
+		let gender = Gender::stringify(&self.gender);
+		format!("{age}{gender}").to_uppercase()
+	}
+
 	pub fn generate_key(&self) -> String {
 		let age = Age::stringify(&self.age, false, true);
 		let gender = Gender::stringify(&self.gender);
