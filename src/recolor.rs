@@ -11,6 +11,7 @@ use crate::dbpf::resource_types::idr::Idr;
 use crate::dbpf::resource_types::txmt::Txmt;
 use crate::dbpf::resource_types::txtr::Txtr;
 
+#[derive(Clone)]
 pub struct OutfitRecolor {
 	pub gzps: Gzps,
 	pub idr: Idr,
@@ -58,9 +59,10 @@ pub fn recolor_outfit(files: Vec<PathBuf>, title: Option<String>, number: Option
 			let mut recolor = create_outfit_recolor(&template, &title, i);
 			if repo {
 				if is_main {
-					main_refs.push(recolor.idr.txmt_refs.clone());
+					main_refs.push(recolor.clone());
 				} else {
-					recolor.idr.txmt_refs = main_refs[i].clone();
+					recolor.idr.txmt_refs = main_refs[i].idr.txmt_refs.clone();
+					recolor.binx.sort_index = main_refs[i].binx.sort_index.clone();
 					recolor.txmts = Vec::new();
 					recolor.txtrs = Vec::new();
 				}
