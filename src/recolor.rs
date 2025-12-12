@@ -125,7 +125,7 @@ fn create_outfit_recolor(template: &OutfitRecolor, title: &str, i: usize) -> Out
 		id: Identifier {
 			type_id: TypeId::TextList,
 			group_id: guid,
-			instance_id: 0,
+			instance_id: 1,
 			resource_id: 0,
 		},
 		key_name: [0; 64],
