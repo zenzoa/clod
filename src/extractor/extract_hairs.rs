@@ -36,12 +36,12 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 		let is_hat = hairs.iter().any(|h| h.gzps.flags & 2 > 0);
 
 		let adult_youngadult_combined = hairs.iter()
-			.any(|h| h.gzps.age.contains(&Age::Adult) && h.gzps.age.contains(&Age::YoungAdult));
+			.any(|h| h.gzps.ages.contains(&Age::Adult) && h.gzps.ages.contains(&Age::YoungAdult));
 
 		let mut hat_ages = Vec::new();
 		for hair in hairs.iter() {
 			if hair.gzps.flags & 2 > 0 {
-				for age in &hair.gzps.age {
+				for age in &hair.gzps.ages {
 					if !hat_ages.contains(&age) {
 						hat_ages.push(age);
 					}
@@ -60,12 +60,12 @@ pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) 
 			let hair_name = hair.gzps.hair_name();
 
 			let duplicates_combined_age = adult_youngadult_combined &&
-				(hair.gzps.age.contains(&Age::Adult) || hair.gzps.age.contains(&Age::YoungAdult)) &&
-				(hair.gzps.age.len() == 1);
+				(hair.gzps.ages.contains(&Age::Adult) || hair.gzps.ages.contains(&Age::YoungAdult)) &&
+				(hair.gzps.ages.len() == 1);
 
 			let mut duplicates_hat_age = false;
 			if is_hat && hair.gzps.flags & 2 == 0 && !hair_name.contains("santacap") {
-				for age in &hair.gzps.age {
+				for age in &hair.gzps.ages {
 					if hat_ages.contains(&age) {
 						duplicates_hat_age = true;
 						break;
@@ -139,7 +139,7 @@ fn get_hairs(input_path: &Path) -> Result<HashMap<String, Hair>, Box<dyn Error>>
 							idr.id.resource_id == gzps.id.resource_id &&
 							gzps.species == 1 &&
 							gzps.parts.contains(&Part::Hair) &&
-							!gzps.category.contains(&Category::Skin) {
+							!gzps.categories.contains(&Category::Skin) {
 								hairs.insert(key, Hair {
 									gzps: gzps.clone(),
 									idr: idr.clone()

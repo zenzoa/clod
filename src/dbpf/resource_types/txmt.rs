@@ -3,6 +3,7 @@ use std::io::Cursor;
 
 use binrw::{ BinRead, BinWrite };
 
+use crate::crc::{ hash_crc24, hash_crc32 };
 use crate::dbpf::{ Identifier, TypeId, SevenBitString, PascalString };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
@@ -49,12 +50,47 @@ impl Txmt {
 		Ok(cur.into_inner())
 	}
 
+	pub fn create_textureless(group_id: u32, title: &str, material: &str) -> Self {
+		let title_txmt = format!("{title}_txmt");
+		let id = Identifier {
+			type_id: TypeId::Txmt,
+			group_id,
+			instance_id: hash_crc24(&title_txmt),
+			resource_id: hash_crc32(&title_txmt)
+		};
+		Self {
+			id,
+			block: TxmtBlock {
+				version: 11,
+				material_definition: SevenBitString::new(&title_txmt),
+				material_description: SevenBitString::new(&format!("##0x{:08x}!{}", group_id, title)),
+				material_type: SevenBitString::new(material),
+				properties: vec![
+					TxmtProperty::new("deprecatedStdMatInvDiffuseCoeffMultiplier", "1"),
+					TxmtProperty::new("reflectivity", "0.5"),
+					TxmtProperty::new("stdMatDiffCoef", "1,1,1,1"),
+					TxmtProperty::new("stdMatSpecCoef", "0.099,0.099,0.099"),
+					TxmtProperty::new("stdMatSpecPower", "2"),
+				]
+			},
+			txtr_names: Vec::new(),
+		}
+	}
+
+	pub fn create_textured(texture_name: &str, group_id: u32, title: &str, material: &str) -> Self {
+		let mut txmt = Self::create_textureless(group_id, title, material);
+		txmt.block.properties[1].value = SevenBitString::new("0");
+		txmt.block.properties.push(TxmtProperty::new("stdMatBaseTextureName", texture_name));
+		txmt.txtr_names.push(SevenBitString::new(texture_name));
+		txmt
+	}
+
 	pub fn replace_guid(&self, new_guid: u32) -> Self {
-		let old_guid_str = format!("{:x}", self.id.group_id);
-		let new_guid_str = format!("{:x}", new_guid);
+		let old_guid_str = format!("{:08x}", self.id.group_id);
+		let new_guid_str = format!("{:08x}", new_guid);
 		let mut new_txmt = self.clone();
 		new_txmt.id.group_id = new_guid;
-		new_txmt.block.file_name = new_txmt.block.file_name.replace(&old_guid_str, &new_guid_str);
+		new_txmt.block.material_definition = new_txmt.block.material_definition.replace(&old_guid_str, &new_guid_str);
 		new_txmt.block.material_description = new_txmt.block.material_description.replace(&old_guid_str, &new_guid_str);
 		for prop in new_txmt.block.properties.iter_mut() {
 			match prop.name.to_string().as_str() {
@@ -74,10 +110,19 @@ pub struct TxmtProperty {
 	pub value: SevenBitString
 }
 
+impl TxmtProperty {
+	pub fn new(name: &str, value: &str) -> Self {
+		Self {
+			name: SevenBitString::new(name),
+			value: SevenBitString::new(value)
+		}
+	}
+}
+
 #[derive(Clone)]
 pub struct TxmtBlock {
 	pub version: u32,
-	pub file_name: SevenBitString,
+	pub material_definition: SevenBitString,
 	pub material_description: SevenBitString,
 	pub material_type: SevenBitString,
 	pub properties: Vec<TxmtProperty>
@@ -89,8 +134,7 @@ impl TxmtBlock {
 		let _block_id = u32::read_le(cur)?;
 		let version = u32::read_le(cur)?;
 
-		let file_name = SGResource::read(cur)?.file_name;
-
+		let material_definition = SGResource::read(cur)?.file_name;
 		let material_description = SevenBitString::read(cur)?;
 		let material_type = SevenBitString::read(cur)?;
 
@@ -105,7 +149,7 @@ impl TxmtBlock {
 
 		Ok(Self {
 			version,
-			file_name,
+			material_definition,
 			material_description,
 			material_type,
 			properties
@@ -117,7 +161,7 @@ impl TxmtBlock {
 		u32::from(TypeId::Txmt).write_le(writer)?;
 		self.version.write_le(writer)?;
 
-		(SGResource { file_name: self.file_name.clone() }).write(writer)?;
+		(SGResource { file_name: self.material_definition.clone() }).write(writer)?;
 
 		self.material_description.write(writer)?;
 		self.material_type.write(writer)?;

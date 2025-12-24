@@ -36,7 +36,7 @@ impl Shpe {
 						let group_id = u32::from_str_radix(&captures[1], 16).unwrap();
 						let instance_id = hash_crc24(&captures[2]);
 						let resource_id = hash_crc32(&captures[2]);
-						Identifier::new(type_id, group_id, instance_id, resource_id)
+						Identifier::new(type_id, group_id, resource_id, instance_id)
 					} else {
 						return Err(format!("{} does not define GMND", resource.id).into());
 					}
@@ -66,12 +66,12 @@ impl Shpe {
 
 #[derive(Clone)]
 pub struct ShpeBlock {
-	version: u32,
-	file_name: SevenBitString,
-	ogn: ObjectGraphNode,
-	lod_values: Vec<u32>,
-	gmnd_items: Vec<GmndItem>,
-	materials: Vec<Material>
+	pub version: u32,
+	pub file_name: SevenBitString,
+	pub ogn: ObjectGraphNode,
+	pub lod_values: Vec<u32>,
+	pub gmnd_items: Vec<GmndItem>,
+	pub materials: Vec<Material>
 }
 
 impl ShpeBlock {
@@ -149,12 +149,12 @@ impl ShpeBlock {
 }
 
 #[derive(Clone)]
-struct GmndItem {
-	item_type: u32,
-	enabled: u8,
-	use_submesh: u8,
-	header_link_index: u32,
-	name: SevenBitString
+pub struct GmndItem {
+	pub item_type: u32,
+	pub enabled: u8,
+	pub use_submesh: u8,
+	pub header_link_index: u32,
+	pub name: SevenBitString
 }
 
 impl GmndItem {
@@ -188,9 +188,9 @@ impl GmndItem {
 }
 
 #[derive(Clone)]
-struct Material {
-	subset: SevenBitString,
-	txmt_name: SevenBitString
+pub struct Material {
+	pub subset: SevenBitString,
+	pub txmt_name: SevenBitString
 }
 
 impl Material {

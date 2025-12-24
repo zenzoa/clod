@@ -20,7 +20,7 @@ pub struct DirItem {
 impl Dir {
 	pub fn new(items: Vec<DirItem>) -> Self {
 		Self {
-			id: Identifier::new(0xE86B1EEF, 0xE86B1EEF, 0x286B1F03, 0),
+			id: Identifier::new(0xE86B1EEF, 0xE86B1EEF, 0, 0x286B1F03),
 			items
 		}
 	}

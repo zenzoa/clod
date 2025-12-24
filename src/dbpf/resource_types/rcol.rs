@@ -29,7 +29,7 @@ impl Rcol {
 			let instance_id = u32::read_le(&mut cur)?;
 			let resource_id = if use_tgir { u32::read_le(&mut cur)? } else { 0 };
 			let type_id = u32::read_le(&mut cur)?;
-			links.push(Identifier::new(type_id, group_id, instance_id, resource_id));
+			links.push(Identifier::new(type_id, group_id, resource_id, instance_id));
 		}
 
 		let num_blocks = u32::read_le(&mut cur)?;

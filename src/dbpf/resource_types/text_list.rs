@@ -4,7 +4,7 @@ use std::string::FromUtf8Error;
 
 use binrw::{ BinRead, BinWrite };
 
-use crate::dbpf::Identifier;
+use crate::dbpf::{ Identifier, TypeId };
 use crate::dbpf::resource::Resource;
 
 #[derive(Clone)]
@@ -65,6 +65,25 @@ impl TextList {
 				StringItem {
 					language_code: 0x01,
 					title: "".to_string(),
+					description: "".to_string()
+				}
+			]
+		}
+	}
+
+	pub fn from_string(title: &str, guid: u32) -> Self {
+		Self {
+			id: Identifier {
+				type_id: TypeId::TextList,
+				group_id: guid,
+				resource_id: 0,
+				instance_id: 1,
+			},
+			key_name: [0; 64],
+			strings: vec![
+				StringItem {
+					language_code: 0x01,
+					title: title.to_string(),
 					description: "".to_string()
 				}
 			]

@@ -4,12 +4,13 @@ use rand::Rng;
 
 use crate::dbpf::{ Dbpf, Identifier, TypeId };
 use crate::dbpf::resource::DecodedResource;
-use crate::dbpf::resource_types::text_list::{ TextList, StringItem };
+use crate::dbpf::resource_types::text_list::TextList;
 use crate::dbpf::resource_types::binx::Binx;
-use crate::dbpf::resource_types::gzps::Gzps;
+use crate::dbpf::resource_types::gzps::{ Gzps, OutfitSpec, Part, Age, Gender, Category, Shoe };
 use crate::dbpf::resource_types::idr::Idr;
 use crate::dbpf::resource_types::txmt::Txmt;
-use crate::dbpf::resource_types::txtr::Txtr;
+use crate::dbpf::resource_types::txtr::{ Txtr, TxtrPurpose };
+use crate::crc::hash_crc32;
 
 #[derive(Clone)]
 pub struct OutfitRecolor {
@@ -45,7 +46,7 @@ impl OutfitRecolor {
 	}
 }
 
-pub fn recolor_outfit(files: Vec<PathBuf>, title: Option<String>, number: Option<usize>, repo: bool) -> Result<(), Box<dyn Error>> {
+pub fn recolor_outfit_from_template(files: Vec<PathBuf>, title: Option<String>, number: Option<usize>, repo: bool) -> Result<(), Box<dyn Error>> {
 	let mut main_refs = Vec::new();
 	let title = title.unwrap_or("OutfitRecolor".to_string());
 	for file in files {
@@ -56,7 +57,7 @@ pub fn recolor_outfit(files: Vec<PathBuf>, title: Option<String>, number: Option
 			let gender_str = template.gzps.age_gender_string();
 			let repo_str = if is_main || !repo { "" } else { "_REPO" };
 			let recolor_title = format!("{title}{gender_str}_{:02}{repo_str}", i+1);
-			let mut recolor = create_outfit_recolor(&template, &title, i);
+			let mut recolor = create_outfit_recolor_from_template(&template, &title, i);
 			if repo {
 				if is_main {
 					main_refs.push(recolor.clone());
@@ -73,6 +74,35 @@ pub fn recolor_outfit(files: Vec<PathBuf>, title: Option<String>, number: Option
 	}
 
 	Ok(())
+}
+
+fn create_outfit_recolor_from_template(template: &OutfitRecolor, title: &str, i: usize) -> OutfitRecolor {
+	let mut rng = rand::rng();
+	let guid: u32 = rng.random();
+
+	let mut gzps = template.gzps.clone();
+	gzps.id.group_id = guid;
+
+	let idr = template.idr.replace_guid(guid);
+
+	let mut binx = template.binx.clone();
+	binx.id.group_id = guid;
+	binx.sort_index += i as i32 + 1;
+
+	let text_list = TextList::from_string(&format!("{title}_{:02}", i+1), guid);
+
+	let txtrs = template.txtrs.iter().map(|txtr| txtr.replace_guid(guid)).collect::<Vec<Txtr>>();
+
+	let txmts = template.txmts.iter().map(|txmt| txmt.replace_guid(guid)).collect::<Vec<Txmt>>();
+
+	OutfitRecolor {
+		gzps,
+		idr,
+		binx,
+		text_list,
+		txmts,
+		txtrs
+	}
 }
 
 fn create_outfit_template(package: &Dbpf) -> Result<OutfitRecolor, Box<dyn Error>> {
@@ -110,39 +140,115 @@ fn create_outfit_template(package: &Dbpf) -> Result<OutfitRecolor, Box<dyn Error
 	})
 }
 
-fn create_outfit_recolor(template: &OutfitRecolor, title: &str, i: usize) -> OutfitRecolor {
+pub fn recolor_outfit_from_mesh(file: PathBuf, title: Option<String>, number: Option<usize>, part: String, age_gender: String, category: Option<String>, shoe: Option<String>) -> Result<(), Box<dyn Error>> {
+	let package = Dbpf::read_from_file(&file, "")?;
+
+	let cres_id = package.resources.iter().find_map(|r| {
+		if let DecodedResource::Cres(cres) = r {
+			Some(cres.id.clone())
+		} else {
+			None
+		}
+	}).ok_or("Package file does not contain CRES resource")?;
+
+	let shpe_id = package.resources.iter().find_map(|r| {
+		if let DecodedResource::Shpe(shpe) = r {
+			Some(shpe.id.clone())
+		} else {
+			None
+		}
+	}).ok_or("Package file does not contain SHPE resource")?;
+
+	let subsets = package.resources.iter().find_map(|r| {
+		if let DecodedResource::Shpe(shpe) = r {
+			Some(shpe.block.materials.iter().map(|m| m.subset.to_string()).collect::<Vec<String>>())
+		} else {
+			None
+		}
+	}).ok_or("Package file does not contain SHPE resource")?;
+
+	let filename = file.file_stem().unwrap().to_string_lossy().replace("_MESH", "").replace("_Mesh", "").replace("_mesh", "");
+	let title = title.unwrap_or(filename.clone());
+
+	let parts = Part::from_string(&part);
+
+	let (age_string, gender_string) = age_gender.split_at(1);
+	let ages = Age::from_string(age_string);
+	let genders = Gender::from_string(gender_string);
+
+	let categories = category.map_or(vec![], |c| Category::from_string(&c));
+
+	let shoe = shoe.map_or_else(|| match parts[0] {
+		Part::Bottom | Part::Body => Shoe::Normal,
+		_ => Shoe::None
+	}, |s| Shoe::from_string(&s));
+
 	let mut rng = rand::rng();
-	let guid: u32 = rng.random();
 
-	let mut gzps = template.gzps.clone();
-	gzps.id.group_id = guid;
+	for i in 0..number.unwrap_or(1) {
+		let spec = OutfitSpec {
+			guid: rng.random(),
+			name: title.replace(' ', "_").to_lowercase(),
+			parts: parts.clone(),
+			ages: ages.clone(),
+			genders: genders.clone(),
+			categories: categories.clone(),
+			flags: 0x8,
+			shoe,
+			subsets: subsets.clone()
+		};
+		let recolor = create_outfit_recolor_from_mesh(&spec, &cres_id, &shpe_id, i);
+		let path = file.with_file_name(format!("{filename}_{:02}.package", i+1));
+		recolor.save(&path)?;
+	}
 
-	let idr = template.idr.replace_guid(guid);
+	Ok(())
+}
 
-	let mut binx = template.binx.clone();
-	binx.id.group_id = guid;
-	binx.sort_index += i as i32 + 1;
+fn create_outfit_recolor_from_mesh(spec: &OutfitSpec, cres_id: &Identifier, shpe_id: &Identifier, i: usize) -> OutfitRecolor {
+	let mut gzps = spec.to_gzps();
+	gzps.id.group_id = spec.guid;
+	gzps.id.resource_id = 0;
+	gzps.id.instance_id = 1;
 
-	let text_list = TextList {
-		id: Identifier {
-			type_id: TypeId::TextList,
-			group_id: guid,
-			instance_id: 1,
-			resource_id: 0,
-		},
-		key_name: [0; 64],
-		strings: vec![
-			StringItem {
-				language_code: 0x01,
-				title: format!("{title}_{:02}", i+1),
-				description: "".to_string()
-			}
-		]
+	let mut binx = Binx::from_gzps(&gzps);
+	binx.sort_index = (hash_crc32(&spec.name.to_string()) + i as u32) as i32;
+
+	let numbered_name = format!("{}_{:02}", spec.name, i+1);
+	let text_list = TextList::from_string(&numbered_name, spec.guid);
+	let resource_title = numbered_name.replace('_', ".");
+
+	let txmts = spec.subsets.iter().map(|subset| {
+		match subset.as_str() {
+			"top" | "bottom" | "body" =>
+				Txmt::create_textureless(spec.guid, &format!("{resource_title}-{subset}"), "SimSkin"),
+			_ =>
+				Txmt::create_textured(&format!(
+					"##0x{:08x}!{resource_title}-{subset}_txtr", spec.guid),
+					spec.guid,
+					&format!("{resource_title}-{subset}"),
+					"SimStandardMaterial"
+				)
+		}
+	}).collect::<Vec<Txmt>>();
+
+	let txtrs = spec.subsets.iter().filter_map(|subset| {
+		match subset.as_str() {
+			"top" | "bottom" | "body" => None,
+			_ => Some(Txtr::create_empty(spec.guid, &format!("{resource_title}-{subset}"), TxtrPurpose::Outfit))
+		}
+	}).collect::<Vec<Txtr>>();
+
+	let idr = Idr {
+		id: Identifier::new(u32::from(TypeId::Idr), spec.guid, 0, 1),
+		cres_ref: Some(cres_id.clone()),
+		shpe_ref: Some(shpe_id.clone()),
+		txmt_refs: txmts.iter().map(|txmt| txmt.id.clone()).collect(),
+		ui_ref: Some(Identifier::new(u32::from(TypeId::Idr), spec.guid, 0, 1)),
+		str_ref: Some(text_list.id.clone()),
+		coll_ref: Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0x00000000, 0x0FFE0080)),
+		gzps_ref: Some(gzps.id.clone())
 	};
-
-	let txtrs = template.txtrs.iter().map(|txtr| txtr.replace_guid(guid)).collect::<Vec<Txtr>>();
-
-	let txmts = template.txmts.iter().map(|txmt| txmt.replace_guid(guid)).collect::<Vec<Txmt>>();
 
 	OutfitRecolor {
 		gzps,

@@ -249,15 +249,14 @@ impl fmt::Display for TypeId {
 pub struct Identifier {
 	pub type_id: TypeId,
 	pub group_id: u32,
-	pub instance_id: u32,
-	pub resource_id: u32
+	pub resource_id: u32,
+	pub instance_id: u32
 }
 
 impl Identifier {
-	pub fn new(type_id: u32, group_id: u32, instance_id: u32, resource_id: u32) -> Self {
-		let type_id_real = TypeId::from(type_id);
+	pub fn new(type_id: u32, group_id: u32, resource_id: u32, instance_id: u32) -> Self {
 		Self {
-			type_id: type_id_real,
+			type_id: TypeId::from(type_id),
 			group_id,
 			instance_id,
 			resource_id
@@ -269,7 +268,7 @@ impl Identifier {
 		let group_id = u32::read_le(cur)?;
 		let instance_id = u32::read_le(cur)?;
 		let resource_id = if use_tgir { u32::read_le(cur)? } else { 0 };
-		Ok(Self::new(type_id, group_id, instance_id, resource_id))
+		Ok(Self::new(type_id, group_id, resource_id, instance_id))
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, use_tgir: bool) -> Result<(), Box<dyn Error>> {
@@ -285,7 +284,7 @@ impl Identifier {
 
 impl fmt::Display for Identifier {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{} {:08X}-{:08X}-{:08X}", self.type_id,  self.group_id, self.instance_id, self.resource_id)
+		write!(f, "{} {:08X}-{:08X}-{:08X}", self.type_id,  self.group_id, self.resource_id, self.instance_id)
 	}
 }
 

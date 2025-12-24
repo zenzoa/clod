@@ -32,37 +32,12 @@ impl GzpsSettings {
 	}
 
 	fn from_string(hide_pack_icon: bool, s: &str) -> Self {
-		let mut categories = Vec::new();
-		if s.contains("everyday") || s.contains("casual") {
-			categories.push(Category::Everyday);
-		}
-		if s.contains("swim") {
-			categories.push(Category::Swimwear);
-		}
-		if s.contains("sleep") || s.contains("pajama") || s.contains("pjs") {
-			categories.push(Category::PJs);
-		}
-		if s.contains("formal") || s.contains("fancy") {
-			categories.push(Category::Formal);
-		}
-		if s.contains("underwear") || s.contains("undies") {
-			categories.push(Category::Undies);
-		}
-		if s.contains("maternity") || s.contains("pregnant") {
-			categories.push(Category::Maternity);
-		}
-		if s.contains("active") || s.contains("athletic") || s.contains("gym") {
-			categories.push(Category::Athletic);
-		}
-		if s.contains("outerwear") {
-			categories.push(Category::Outerwear);
-		}
 		Self {
 			hide_pack_icon,
 			unisex: s.contains("unisex"),
 			hidden: Some(s.contains("hidden")),
 			notownies: Some(s.contains("notownies")),
-			categories: Some(categories)
+			categories: Some(Category::from_string(s))
 		}
 	}
 
@@ -78,10 +53,10 @@ impl GzpsSettings {
 		}
 
 		// enable for young adult + adult
-		if gzps.age.contains(&Age::YoungAdult) && !gzps.age.contains(&Age::Adult) {
-			gzps.age.push(Age::Adult);
-		} else if gzps.age.contains(&Age::Adult) && !gzps.age.contains(&Age::YoungAdult) {
-			gzps.age.push(Age::YoungAdult);
+		if gzps.ages.contains(&Age::YoungAdult) && !gzps.ages.contains(&Age::Adult) {
+			gzps.ages.push(Age::Adult);
+		} else if gzps.ages.contains(&Age::Adult) && !gzps.ages.contains(&Age::YoungAdult) {
+			gzps.ages.push(Age::YoungAdult);
 		}
 
 		// set hidden/visible in CAS
@@ -104,7 +79,7 @@ impl GzpsSettings {
 
 		// set categories
 		if let Some(categories) = &self.categories {
-			gzps.category = categories.clone();
+			gzps.categories = categories.clone();
 		}
 	}
 }
@@ -150,7 +125,7 @@ pub fn default_outfit(source: Option<PathBuf>, auto: bool, hide_pack_icon: bool)
 		let mut index_to_remove = None;
 		for (j, outfit_index) in outfit_indexes.iter().enumerate() {
 			let outfit = &outfits[*outfit_index];
-			if Age::are_compatible(&gzps.age, &outfit.gzps.age) && Gender::are_compatible(&gzps.gender, &outfit.gzps.gender, &gzps.age) {
+			if Age::are_compatible(&gzps.ages, &outfit.gzps.ages) && Gender::are_compatible(&gzps.genders, &outfit.gzps.genders, &gzps.ages) {
 				pairing = Some(*outfit_index);
 				index_to_remove = Some(j);
 				break;
@@ -338,7 +313,7 @@ fn update_props(s: &mut Cursive, i: &usize) {
 		outfit_select.add_item("-", usize::MAX);
 		let mut select_index = 1;
 		for (j, outfit) in data.outfits.iter().enumerate() {
-			if Age::are_compatible(&gzps.age, &outfit.gzps.age) && Gender::are_compatible(&gzps.gender, &outfit.gzps.gender, &gzps.age) {
+			if Age::are_compatible(&gzps.ages, &outfit.gzps.ages) && Gender::are_compatible(&gzps.genders, &outfit.gzps.genders, &gzps.ages) {
 				outfit_select.add_item(&outfit.title, j+1);
 				if let Some(outfit_index) = data.pairings[*i] {
 					if outfit_index == j {
@@ -353,24 +328,24 @@ fn update_props(s: &mut Cursive, i: &usize) {
 		townies_checkbox.set_checked(gzps.flags & 8 == 0);
 		flags_text.set_content(format!("{}", gzps.flags));
 
-		everyday_checkbox.set_checked(gzps.category.contains(&Category::Everyday));
-		formal_checkbox.set_checked(gzps.category.contains(&Category::Formal));
-		undies_checkbox.set_checked(gzps.category.contains(&Category::Undies));
-		pjs_checkbox.set_checked(gzps.category.contains(&Category::PJs));
-		swimwear_checkbox.set_checked(gzps.category.contains(&Category::Swimwear));
-		athletic_checkbox.set_checked(gzps.category.contains(&Category::Athletic));
-		outerwear_checkbox.set_checked(gzps.category.contains(&Category::Outerwear));
-		maternity_checkbox.set_checked(gzps.category.contains(&Category::Maternity));
+		everyday_checkbox.set_checked(gzps.categories.contains(&Category::Everyday));
+		formal_checkbox.set_checked(gzps.categories.contains(&Category::Formal));
+		undies_checkbox.set_checked(gzps.categories.contains(&Category::Undies));
+		pjs_checkbox.set_checked(gzps.categories.contains(&Category::PJs));
+		swimwear_checkbox.set_checked(gzps.categories.contains(&Category::Swimwear));
+		athletic_checkbox.set_checked(gzps.categories.contains(&Category::Athletic));
+		outerwear_checkbox.set_checked(gzps.categories.contains(&Category::Outerwear));
+		maternity_checkbox.set_checked(gzps.categories.contains(&Category::Maternity));
 
-		baby_checkbox.set_checked(gzps.age.contains(&Age::Baby));
-		toddler_checkbox.set_checked(gzps.age.contains(&Age::Toddler));
-		child_checkbox.set_checked(gzps.age.contains(&Age::Child));
-		teen_checkbox.set_checked(gzps.age.contains(&Age::Teen));
-		adult_checkbox.set_checked(gzps.age.contains(&Age::YoungAdult) || gzps.age.contains(&Age::Adult));
-		elder_checkbox.set_checked(gzps.age.contains(&Age::Elder));
+		baby_checkbox.set_checked(gzps.ages.contains(&Age::Baby));
+		toddler_checkbox.set_checked(gzps.ages.contains(&Age::Toddler));
+		child_checkbox.set_checked(gzps.ages.contains(&Age::Child));
+		teen_checkbox.set_checked(gzps.ages.contains(&Age::Teen));
+		adult_checkbox.set_checked(gzps.ages.contains(&Age::YoungAdult) || gzps.ages.contains(&Age::Adult));
+		elder_checkbox.set_checked(gzps.ages.contains(&Age::Elder));
 
-		male_checkbox.set_checked(gzps.gender.contains(&Gender::Male));
-		female_checkbox.set_checked(gzps.gender.contains(&Gender::Female));
+		male_checkbox.set_checked(gzps.genders.contains(&Gender::Male));
+		female_checkbox.set_checked(gzps.genders.contains(&Gender::Female));
 	});
 }
 
@@ -432,7 +407,7 @@ fn set_category(s: &mut Cursive, category: Category, value: bool) {
 	let i = gzps_select.selected_id().unwrap();
 	s.with_user_data(|data: &mut SivData| {
 		let gzps = &mut data.gzps_list[i];
-		Category::toggle_category(&mut gzps.category, category, value);
+		Category::toggle_category(&mut gzps.categories, category, value);
 	});
 }
 
@@ -441,7 +416,7 @@ fn set_age(s: &mut Cursive, age: Age, value: bool) {
 	let i = gzps_select.selected_id().unwrap();
 	s.with_user_data(|data: &mut SivData| {
 		let gzps = &mut data.gzps_list[i];
-		Age::toggle_age(&mut gzps.age, age, value);
+		Age::toggle_age(&mut gzps.ages, age, value);
 	});
 }
 
@@ -450,7 +425,7 @@ fn set_gender(s: &mut Cursive, gender: Gender, value: bool) {
 	let i = gzps_select.selected_id().unwrap();
 	s.with_user_data(|data: &mut SivData| {
 		let gzps = &mut data.gzps_list[i];
-		Gender::toggle_gender(&mut gzps.gender, gender, value);
+		Gender::toggle_gender(&mut gzps.genders, gender, value);
 	});
 }
 
@@ -562,7 +537,7 @@ fn save_default(data: &SivData, output_path: &Path, compress: bool) -> Result<Ve
 			let outfit_name = new_gzps.name.to_string().to_lowercase();
 			if outfit_name.starts_with('y') && outfit_name.contains("clone") {
 				// create a STR# if none exists with this outfit's group id
-				let text_list_id = Identifier::new(u32::from(TypeId::TextList), new_gzps.id.group_id, 0x1, 0);
+				let text_list_id = Identifier::new(u32::from(TypeId::TextList), new_gzps.id.group_id, 0, 1);
 				if !text_lists.iter().any(|t| t.id.group_id == new_gzps.id.group_id) {
 					text_lists.push(TextList::create_empty(text_list_id.clone()));
 				}
@@ -573,7 +548,7 @@ fn save_default(data: &SivData, output_path: &Path, compress: bool) -> Result<Ve
 				// add additional references to 3IDR
 				new_outfit.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
 				new_outfit.idr.str_ref = Some(text_list_id.clone());
-				new_outfit.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0x0FFE0080, 0));
+				new_outfit.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0, 0x0FFE0080));
 				new_outfit.idr.gzps_ref = Some(new_gzps.id.clone());
 
 			} else {
@@ -620,7 +595,7 @@ fn save_extras(data: &SivData, resources: &[DecodedResource]) -> Result<(), Box<
 
 	for outfit in extra_outfits.iter_mut() {
 		// create a STR# if none exists with this outfit's group id
-		let text_list_id = Identifier::new(u32::from(TypeId::TextList), outfit.gzps.id.group_id, 0x1, 0);
+		let text_list_id = Identifier::new(u32::from(TypeId::TextList), outfit.gzps.id.group_id, 0, 1);
 		if !text_lists.iter().any(|t| t.id.group_id == outfit.gzps.id.group_id) {
 			text_lists.push(TextList::create_empty(text_list_id.clone()));
 		}

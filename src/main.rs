@@ -101,8 +101,8 @@ enum Command {
 		/// List of package files to compress
 		files: Vec<PathBuf>
 	},
-	/// Create one or more outfit recolors
-	RecolorOutfit {
+	/// Create one or more outfit recolors from an existing recolor
+	RecolorOutfitTemplate {
 		/// One recolor package per desired age+gender to use as template
 		files: Vec<PathBuf>,
 		/// Title for recolors
@@ -114,6 +114,29 @@ enum Command {
 		/// Repository recolors to first age+gender
 		#[arg(short, long)]
 		repo: bool
+	},
+	/// Create one or more outfit recolors from a mesh package
+	RecolorOutfitMesh {
+		/// Mesh package
+		file: PathBuf,
+		/// Title for recolors
+		#[arg(short, long)]
+		title: Option<String>,
+		/// Number of new recolor packages to make
+		#[arg(short, long)]
+		number: Option<usize>,
+		/// Outfit part ("top", "bottom", or "body")
+		#[arg(short, long)]
+		part: String,
+		/// Age and gender (eg. "am", "ef", or "cu")
+		#[arg(short, long)]
+		age_gender: String,
+		/// Category ("everyday", "swim", "sleep", "formal", "underwear", "maternity", "active", "outerwear") or multiple categories separated by "_" (eg. "everyday_formal")
+		#[arg(short, long)]
+		category: Option<String>,
+		/// Shoe type ("none", "boots", "heels", "normal", "sandals", "pajamas", "armor")
+		#[arg(short, long)]
+		shoe: Option<String>
 	}
 }
 
@@ -141,8 +164,11 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		Some(Command::Compress{ files }) => {
 			compressor::compress_packages(files)
 		}
-		Some(Command::RecolorOutfit{ files, title, number, repo }) => {
-			recolor::recolor_outfit(files, title, number, repo)
+		Some(Command::RecolorOutfitTemplate{ files, title, number, repo }) => {
+			recolor::recolor_outfit_from_template(files, title, number, repo)
+		}
+		Some(Command::RecolorOutfitMesh{ file, title, number, part, age_gender, category, shoe }) => {
+			recolor::recolor_outfit_from_mesh(file, title, number, part, age_gender, category, shoe)
 		}
 		None => Err("No command given.".into())
 	}

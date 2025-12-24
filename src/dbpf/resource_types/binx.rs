@@ -1,9 +1,10 @@
 use std::error::Error;
 use std::io::Cursor;
 
-use crate::dbpf::{ Identifier, PascalString };
+use crate::dbpf::{ Identifier, PascalString, TypeId };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
+use crate::dbpf::resource_types::gzps::Gzps;
 
 #[derive(Clone)]
 pub struct Binx {
@@ -73,6 +74,22 @@ impl Binx {
 			sort_index,
 			string_index
 		})
+	}
+
+	pub fn from_gzps(gzps: &Gzps) -> Self {
+		let mut id = gzps.id.clone();
+		id.type_id = TypeId::Binx;
+		let key = gzps.max_resource_key();
+		Self {
+			id,
+			icon_idx: key + 1,
+			stringset_idx: key + 2,
+			bin_idx: key + 3,
+			object_idx: key + 4,
+			creator_id: PascalString::new("00000000-0000-0000-0000-000000000000"),
+			sort_index: 0,
+			string_index: 1
+		}
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {

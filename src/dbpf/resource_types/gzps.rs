@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 use regex::Regex;
 
-use crate::dbpf::{ Identifier, PascalString };
+use crate::dbpf::{ Identifier, PascalString, TypeId };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
 
@@ -16,8 +16,8 @@ pub struct Gzps {
 	pub version: Option<u32>,
 	pub product: Option<u32>,
 
-	pub age: Vec<Age>,
-	pub gender: Vec<Gender>,
+	pub ages: Vec<Age>,
+	pub genders: Vec<Gender>,
 	pub species: u32,
 	pub outfit: Vec<Part>,
 	pub parts: Vec<Part>,
@@ -30,7 +30,7 @@ pub struct Gzps {
 	pub outfit_type: PascalString,
 	pub skintone: PascalString,
 	pub hairtone: HairTone,
-	pub category: Vec<Category>,
+	pub categories: Vec<Category>,
 	pub shoe: Shoe,
 	pub fitness: u32,
 
@@ -62,12 +62,12 @@ impl Gzps {
 			_ => None
 		};
 
-		gzps.age = match cpf.get_prop("age") {
+		gzps.ages = match cpf.get_prop("age") {
 			Some(PropertyValue::Uint(val)) => Age::from_flag(*val),
 			_ => return Err("GZPS is missing \"age\" property.".into())
 		};
 
-		gzps.gender = match cpf.get_prop("gender") {
+		gzps.genders = match cpf.get_prop("gender") {
 			Some(PropertyValue::Uint(val)) => Gender::from_flag(*val),
 			_ => return Err("GZPS is missing \"gender\" property.".into())
 		};
@@ -139,7 +139,7 @@ impl Gzps {
 			_ => return Err("GZPS is missing \"hairtone\" property.".into())
 		};
 
-		gzps.category = match cpf.get_prop("category") {
+		gzps.categories = match cpf.get_prop("category") {
 			Some(PropertyValue::Uint(val)) => Category::from_flag(*val),
 			_ => return Err("GZPS is missing \"category\" property.".into())
 		};
@@ -205,8 +205,8 @@ impl Gzps {
 		if let Some(product) = self.product {
 			props.push(("product".to_string(), PropertyValue::Uint(product)));
 		}
-		props.push(("age".to_string(), PropertyValue::Uint(Age::to_flag(&self.age))));
-		props.push(("gender".to_string(), PropertyValue::Uint(Gender::to_flag(&self.gender))));
+		props.push(("age".to_string(), PropertyValue::Uint(Age::to_flag(&self.ages))));
+		props.push(("gender".to_string(), PropertyValue::Uint(Gender::to_flag(&self.genders))));
 		props.push(("species".to_string(), PropertyValue::Uint(self.species)));
 		props.push(("outfit".to_string(), PropertyValue::Uint(Part::to_flag(&self.outfit))));
 		props.push(("parts".to_string(), PropertyValue::Uint(Part::to_flag(&self.parts))));
@@ -223,7 +223,7 @@ impl Gzps {
 		props.push(("type".to_string(), PropertyValue::String(self.outfit_type.clone())));
 		props.push(("skintone".to_string(), PropertyValue::String(self.skintone.clone())));
 		props.push(("hairtone".to_string(), PropertyValue::String(self.hairtone.to_pascal_string())));
-		props.push(("category".to_string(), PropertyValue::Uint(Category::to_flag(&self.category))));
+		props.push(("category".to_string(), PropertyValue::Uint(Category::to_flag(&self.categories))));
 		props.push(("shoe".to_string(), PropertyValue::Uint(self.shoe as u32)));
 		props.push(("fitness".to_string(), PropertyValue::Uint(self.fitness)));
 		props.push(("resourcekeyidx".to_string(), PropertyValue::Uint(self.resource)));
@@ -250,8 +250,8 @@ impl Gzps {
 		match property {
 			"version" => self.version = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
 			"product" => self.product = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
-			"age" => self.age = Age::from_flag(value.parse::<u32>()?),
-			"gender" => self.gender = Gender::from_flag(value.parse::<u32>()?),
+			"age" => self.ages = Age::from_flag(value.parse::<u32>()?),
+			"gender" => self.genders = Gender::from_flag(value.parse::<u32>()?),
 			"species" => self.species = value.parse::<u32>()?,
 			"outfit" => self.outfit = Part::from_flag(value.parse::<u32>()?),
 			"parts" => self.parts = Part::from_flag(value.parse::<u32>()?),
@@ -264,7 +264,7 @@ impl Gzps {
 			"outfit_type" => self.outfit_type = PascalString::new(value),
 			"skintone" => self.skintone = PascalString::new(value),
 			"hairtone" => self.hairtone = HairTone::from_string(value),
-			"category" => self.category = Category::from_flag(value.parse::<u32>()?),
+			"category" => self.categories = Category::from_flag(value.parse::<u32>()?),
 			"shoe" => self.shoe = Shoe::from_flag(value.parse::<u32>()?),
 			"fitness" => self.fitness = value.parse::<u32>()?,
 			_ => { return Err(format!("No property named '{property}' found in GZPS").into()); }
@@ -273,14 +273,14 @@ impl Gzps {
 	}
 
 	pub fn age_gender_string(&self) -> String {
-		let age = Age::stringify(&self.age, true, true);
-		let gender = Gender::stringify(&self.gender);
+		let age = Age::stringify(&self.ages, true, true);
+		let gender = Gender::stringify(&self.genders);
 		format!("{age}{gender}").to_uppercase()
 	}
 
 	pub fn generate_key(&self) -> String {
-		let age = Age::stringify(&self.age, false, true);
-		let gender = Gender::stringify(&self.gender);
+		let age = Age::stringify(&self.ages, false, true);
+		let gender = Gender::stringify(&self.genders);
 		let part = Part::stringify(&self.parts);
 		let full_name = self.name.to_string().to_lowercase().trim().to_string();
 
@@ -300,7 +300,7 @@ impl Gzps {
 	}
 
 	pub fn hair_name(&self) -> String {
-		let age = Age::stringify(&self.age, false, false);
+		let age = Age::stringify(&self.ages, false, false);
 		let hairtone = if self.hairtone == HairTone::Other { "".to_string() } else { format!("_{}",self.hairtone.stringify()) };
 		let hidden = if self.flags & 1 > 0 { "_HIDDEN" } else { "" };
 		format!("{}{}{}{}", age, self.hair_group_name(), hairtone, hidden)
@@ -336,7 +336,7 @@ impl Gzps {
 		}
 		group_name.push_str(&"_clone".repeat(num_clones));
 		group_name.insert_str(0, "hair_");
-		group_name.insert_str(0, &Gender::stringify(&self.gender));
+		group_name.insert_str(0, &Gender::stringify(&self.genders));
 		group_name
 	}
 
@@ -346,11 +346,61 @@ impl Gzps {
 	}
 
 	pub fn make_unisex(&mut self) {
-		if !self.age.contains(&Age::Teen) &&
-			!self.age.contains(&Age::YoungAdult) &&
-			!self.age.contains(&Age::Adult) &&
-			!self.age.contains(&Age::Elder) {
-				self.gender = vec![Gender::Male, Gender::Female];
+		if !self.ages.contains(&Age::Teen) &&
+			!self.ages.contains(&Age::YoungAdult) &&
+			!self.ages.contains(&Age::Adult) &&
+			!self.ages.contains(&Age::Elder) {
+				self.genders = vec![Gender::Male, Gender::Female];
+		}
+	}
+}
+
+pub struct OutfitSpec {
+	pub guid: u32,
+	pub name: String,
+	pub ages: Vec<Age>,
+	pub genders: Vec<Gender>,
+	pub parts: Vec<Part>,
+	pub flags: u32,
+	pub categories: Vec<Category>,
+	pub shoe: Shoe,
+	pub subsets: Vec<String>
+}
+
+impl OutfitSpec {
+	pub fn to_gzps(&self) -> Gzps {
+		Gzps {
+			id: Identifier::new(u32::from(TypeId::Gzps), self.guid, 0, 1),
+			cpf_type: CpfType::Normal,
+			cpf_version: Some(2),
+			version: Some(6),
+			product: Some(0),
+			ages: self.ages.clone(),
+			genders: self.genders.clone(),
+			species: 1,
+			outfit: self.parts.clone(),
+			parts: self.parts.clone(),
+			flags: self.flags,
+			name: PascalString::new(&self.name),
+			creator: PascalString::new("00000000-0000-0000-0000-000000000000"),
+			family: PascalString::new("00000000-0000-0000-0000-000000000000"),
+			genetic: None,
+			priority: None,
+			outfit_type: PascalString::new("skin"),
+			skintone: PascalString::new("00000000-0000-0000-0000-000000000000"),
+			hairtone: HairTone::None,
+			categories: self.categories.clone(),
+			shoe: self.shoe,
+			fitness: 0,
+			resource: 0,
+			shape: 1,
+			overrides: self.subsets.iter().enumerate().map(|(i, subset)|
+				Override {
+					shape: 0,
+					subset: PascalString::new(subset),
+					resource: i as u32 + 2
+				}).collect::<Vec<Override>>(),
+			title: self.name.clone()
 		}
 	}
 }
@@ -428,6 +478,35 @@ impl Category {
 		if categories.contains(&Self::Outerwear) { category_string.push('o'); }
 		category_string
 	}
+
+	pub fn from_string(s: &str) -> Vec<Self> {
+		let mut categories = Vec::new();
+		if s.contains("everyday") || s.contains("casual") {
+			categories.push(Self::Everyday);
+		}
+		if s.contains("swim") {
+			categories.push(Self::Swimwear);
+		}
+		if s.contains("sleep") || s.contains("pajama") || s.contains("pjs") {
+			categories.push(Self::PJs);
+		}
+		if s.contains("formal") || s.contains("fancy") {
+			categories.push(Self::Formal);
+		}
+		if s.contains("underwear") || s.contains("undies") {
+			categories.push(Self::Undies);
+		}
+		if s.contains("maternity") || s.contains("pregnant") {
+			categories.push(Self::Maternity);
+		}
+		if s.contains("active") || s.contains("athletic") || s.contains("gym") {
+			categories.push(Self::Athletic);
+		}
+		if s.contains("outerwear") {
+			categories.push(Self::Outerwear);
+		}
+		categories
+	}
 }
 
 #[repr(u32)]
@@ -487,6 +566,18 @@ impl Age {
 	pub fn remove_age(ages: &mut Vec<Self>, age: Self) {
 		if let Some(i) = ages.iter().position(|x| *x == age) {
 			ages.remove(i);
+		}
+	}
+
+	pub fn from_string(s: &str) -> Vec<Self> {
+		match s.to_lowercase().as_str() {
+			"b" => vec![Self::Baby],
+			"p" => vec![Self::Toddler],
+			"c" => vec![Self::Child],
+			"t" => vec![Self::Teen],
+			"a" | "y" => vec![Self::Adult, Self::YoungAdult],
+			"e" => vec![Self::Elder],
+			_ => vec![]
 		}
 	}
 
@@ -560,6 +651,14 @@ impl Gender {
 		}
 	}
 
+	pub fn from_string(s: &str) -> Vec<Self> {
+		match s.to_lowercase().as_str() {
+			"m" => vec![Self::Male],
+			"f" => vec![Self::Female],
+			_ => vec![Self::Male, Self::Female]
+		}
+	}
+
 	pub fn stringify(genders: &[Self]) -> String {
 		(if genders.len() > 1 { "u" }
 		else if genders.contains(&Self::Male) { "m" }
@@ -575,9 +674,9 @@ pub enum Shoe {
 	#[default]
 	None = 0,
 	Barefoot = 1,
-	HeavyBoots = 2,
+	Boots = 2,
 	Heels = 3,
-	NormalShoes = 4,
+	Normal = 4,
 	Sandals = 5,
 	Pajamas = 6,
 	Armored = 7
@@ -586,14 +685,27 @@ pub enum Shoe {
 impl Shoe {
 	pub fn from_flag(flag: u32) -> Self {
 		match flag {
-			1 => Shoe::Barefoot,
-			2 => Shoe::HeavyBoots,
-			3 => Shoe::Heels,
-			4 => Shoe::NormalShoes,
-			5 => Shoe::Sandals,
-			6 => Shoe::Pajamas,
-			7 => Shoe::Armored,
-			_ => Shoe::None
+			1 => Self::Barefoot,
+			2 => Self::Boots,
+			3 => Self::Heels,
+			4 => Self::Normal,
+			5 => Self::Sandals,
+			6 => Self::Pajamas,
+			7 => Self::Armored,
+			_ => Self::None
+		}
+	}
+
+	pub fn from_string(s: &str) -> Self {
+		match s.to_lowercase().as_str() {
+			"bare" | "barefoot" => Self::Barefoot,
+			"boot" | "boots" => Self::Boots,
+			"heel" | "heels" => Self::Heels,
+			"normal" => Self::Normal,
+			"sandal" | "sandals" => Self::Sandals,
+			"pj" | "pjs" | "pajama" | "pajamas" => Self::Pajamas,
+			"armor" | "armored" => Self::Armored,
+			_ => Self::None
 		}
 	}
 }
@@ -645,6 +757,15 @@ impl Part {
 			flag += *part as u32;
 		}
 		flag
+	}
+
+	pub fn from_string(s: &str) -> Vec<Self> {
+		match s.to_lowercase().as_str() {
+			"top" => vec![Self::Top],
+			"bottom" | "bot" => vec![Self::Bottom],
+			"body" => vec![Self::Body],
+			_ => vec![]
+		}
 	}
 
 	pub fn stringify(parts: &[Self]) -> String {

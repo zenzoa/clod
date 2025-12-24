@@ -27,9 +27,9 @@ pub fn extract_outfits(input_path: Option<PathBuf>, output_path: Option<PathBuf>
 	let mut outfit_groups: HashMap<String, Vec<&OriginalOutfit>> = HashMap::new();
 	for outfit in outfits.values() {
 		if outfit.gzps.species == 1 &&
-			!outfit.gzps.category.contains(&Category::Skin) &&
-			!outfit.gzps.category.contains(&Category::TryOn) &&
-			!outfit.gzps.category.contains(&Category::Overlay) &&
+			!outfit.gzps.categories.contains(&Category::Skin) &&
+			!outfit.gzps.categories.contains(&Category::TryOn) &&
+			!outfit.gzps.categories.contains(&Category::Overlay) &&
 			outfit.gzps.parts.len() == 1 &&
 			!outfit.gzps.name.to_string().contains("fried") &&
 			(outfit.gzps.parts[0] == Part::Body || outfit.gzps.parts[0] == Part::Top || outfit.gzps.parts[0] == Part::Bottom) {
@@ -52,7 +52,7 @@ pub fn extract_outfits(input_path: Option<PathBuf>, output_path: Option<PathBuf>
 				resources.push(DecodedResource::Idr(idr.clone()));
 			}
 			let hidden = if outfit.gzps.flags & 1 > 0 { "_hidden" } else { "" };
-			let file_name = format!("{}_{}{}", outfit.gzps.name, Category::stringify(&outfit.gzps.category), hidden);
+			let file_name = format!("{}_{}{}", outfit.gzps.name, Category::stringify(&outfit.gzps.categories), hidden);
 			let file_path = folder_path.join(file_name).with_extension("package");
 			Dbpf::write_package_file(&resources, &file_path, false)?;
 		}

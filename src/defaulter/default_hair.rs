@@ -61,20 +61,20 @@ pub fn default_hair(
 	let mut unreplaced_warnings = Vec::new();
 
 	for (i, gzps) in gzps_list.iter().enumerate() {
-		if gzps.gender.len() == 1 {
-			gender = Some(gzps.gender[0]);
+		if gzps.genders.len() == 1 {
+			gender = Some(gzps.genders[0]);
 		}
-		if !gzps.age.contains(&Age::Adult) && gzps.age.contains(&Age::YoungAdult) {
+		if !gzps.ages.contains(&Age::Adult) && gzps.ages.contains(&Age::YoungAdult) {
 			separate_youngadult = true;
 		}
 		for (j, hair) in replacement_hairs.iter().enumerate() {
 			if gzps.hairtone == hair.gzps.hairtone &&
-				Age::are_compatible(&gzps.age, &hair.gzps.age) &&
-				Gender::are_compatible(&gzps.gender, &hair.gzps.gender, &gzps.age) &&
+				Age::are_compatible(&gzps.ages, &hair.gzps.ages) &&
+				Gender::are_compatible(&gzps.genders, &hair.gzps.genders, &gzps.ages) &&
 				pairings[i].is_none() {
 					println!("Replacing {}", gzps.title);
 					pairings[i] = Some(j);
-					for age in &gzps.age {
+					for age in &gzps.ages {
 						age_color_sets.push(format!("{}_{}", Age::stringify(&[*age], false, false), gzps.hairtone.stringify()));
 					}
 			}
@@ -88,9 +88,9 @@ pub fn default_hair(
 	let mut extra_hairs = Vec::new();
 	if add_ages {
 		for (j, hair) in replacement_hairs.iter().enumerate() {
-			if !pairings.contains(&Some(j)) && gender.is_none_or(|g| hair.gzps.gender.contains(&g)) {
+			if !pairings.contains(&Some(j)) && gender.is_none_or(|g| hair.gzps.genders.contains(&g)) {
 				let mut ages_to_add = Vec::new();
-				for age in &hair.gzps.age {
+				for age in &hair.gzps.ages {
 					let age_color = format!("{}_{}", Age::stringify(&[*age], false, false), hair.gzps.hairtone.stringify());
 					if !age_color_sets.contains(&age_color) && (*age != Age::YoungAdult || separate_youngadult) {
 						ages_to_add.push(*age);
@@ -122,13 +122,13 @@ pub fn default_hair(
 			new_gzps.overrides = new_hair.gzps.overrides.clone();
 
 			// adjust age if necessary
-			if !separate_youngadult && new_gzps.age.contains(&Age::Adult) && !new_gzps.age.contains(&Age::YoungAdult) {
-				new_gzps.age.push(Age::YoungAdult);
+			if !separate_youngadult && new_gzps.ages.contains(&Age::Adult) && !new_gzps.ages.contains(&Age::YoungAdult) {
+				new_gzps.ages.push(Age::YoungAdult);
 			}
 
 			// enable for all categories
 			if all_categories {
-				new_gzps.category = vec![
+				new_gzps.categories = vec![
 					Category::Everyday,
 					Category::Swimwear,
 					Category::PJs,
@@ -188,8 +188,8 @@ pub fn default_hair(
 			} else {
 				// add required references to 3IDR for hidden hair (in case it's a hidden clone)
 				new_hair.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
-				new_hair.idr.str_ref = Some(Identifier::new(u32::from(TypeId::TextList), 0x7F43F357, 0x1, 0));
-				new_hair.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x7F43F357, 0x6CDBC43D, 0));
+				new_hair.idr.str_ref = Some(Identifier::new(u32::from(TypeId::TextList), 0x7F43F357, 0, 1));
+				new_hair.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x7F43F357, 0, 0x6CDBC43D));
 				new_hair.idr.gzps_ref = Some(new_gzps.id.clone());
 
 				// create BINX resource
@@ -209,7 +209,7 @@ pub fn default_hair(
 		let mut new_hair = replacement_hairs[*hair_index].clone();
 		let gzps = &new_hairs[0].gzps;
 
-		new_hair.gzps.age = ages.clone();
+		new_hair.gzps.ages = ages.clone();
 
 		// copy relevant values from GZPS updated in the last step
 		new_hair.gzps.version = gzps.version;
@@ -217,7 +217,7 @@ pub fn default_hair(
 		new_hair.gzps.creator = gzps.creator.clone();
 		new_hair.gzps.family = gzps.family.clone();
 		new_hair.gzps.flags = gzps.flags;
-		new_hair.gzps.category = gzps.category.clone();
+		new_hair.gzps.categories = gzps.categories.clone();
 		new_hair.gzps.skintone = gzps.skintone.clone();
 
 		new_hair.gzps.genetic = Some(0.0);
@@ -225,8 +225,8 @@ pub fn default_hair(
 
 		// add required references to 3IDR
 		new_hair.idr.ui_ref = Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0));
-		new_hair.idr.str_ref = Some(Identifier::new(u32::from(TypeId::TextList), 0x7F43F357, 0x1, 0));
-		new_hair.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x7F43F357, 0x6CDBC43D, 0));
+		new_hair.idr.str_ref = Some(Identifier::new(u32::from(TypeId::TextList), 0x7F43F357, 0, 1));
+		new_hair.idr.coll_ref = Some(Identifier::new(u32::from(TypeId::Coll), 0x7F43F357, 0, 0x6CDBC43D));
 		new_hair.idr.gzps_ref = Some(new_hair.gzps.id.clone());
 
 		// create BINX resource
