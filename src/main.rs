@@ -117,8 +117,8 @@ enum Command {
 	},
 	/// Create one or more outfit recolors from a mesh package
 	RecolorOutfitMesh {
-		/// Mesh package
-		file: PathBuf,
+		/// Mesh package plus any recolor packages to repository to
+		files: Vec<PathBuf>,
 		/// Title for recolors
 		#[arg(short, long)]
 		title: Option<String>,
@@ -167,8 +167,8 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		Some(Command::RecolorOutfitTemplate{ files, title, number, repo }) => {
 			recolor::recolor_outfit_from_template(files, title, number, repo)
 		}
-		Some(Command::RecolorOutfitMesh{ file, title, number, part, age_gender, category, shoe }) => {
-			recolor::recolor_outfit_from_mesh(file, title, number, part, age_gender, category, shoe)
+		Some(Command::RecolorOutfitMesh{ files, title, number, part, age_gender, category, shoe }) => {
+			recolor::recolor_outfit_from_mesh(files, title, number, part, age_gender, category, shoe)
 		}
 		None => Err("No command given.".into())
 	}

@@ -66,11 +66,14 @@ impl Txmt {
 				material_description: SevenBitString::new(&format!("##0x{:08x}!{}", group_id, title)),
 				material_type: SevenBitString::new(material),
 				properties: vec![
-					TxmtProperty::new("deprecatedStdMatInvDiffuseCoeffMultiplier", "1"),
-					TxmtProperty::new("reflectivity", "0.5"),
-					TxmtProperty::new("stdMatDiffCoef", "1,1,1,1"),
-					TxmtProperty::new("stdMatSpecCoef", "0.099,0.099,0.099"),
-					TxmtProperty::new("stdMatSpecPower", "2"),
+					TxmtProperty::new("stdMatAlphaBlendMode", "none"),
+					TxmtProperty::new("stdMatAlphaMultiplier", "1"),
+					TxmtProperty::new("stdMatAlphaRefValue", "127"),
+					TxmtProperty::new("stdMatAlphaTestEnabled", "false"),
+					TxmtProperty::new("stdMatBaseTextureAddressingU", "tile"),
+					TxmtProperty::new("stdMatBaseTextureAddressingV", "tile"),
+					TxmtProperty::new("stdMatBaseTextureAlphaReplicate", "false"),
+					TxmtProperty::new("stdMatNormalMapTextureEnabled", "false"),
 				]
 			},
 			txtr_names: Vec::new(),
@@ -79,7 +82,7 @@ impl Txmt {
 
 	pub fn create_textured(texture_name: &str, group_id: u32, title: &str, material: &str) -> Self {
 		let mut txmt = Self::create_textureless(group_id, title, material);
-		txmt.block.properties[1].value = SevenBitString::new("0");
+		txmt.block.properties.push(TxmtProperty::new("stdMatBaseTextureEnabled", "true"));
 		txmt.block.properties.push(TxmtProperty::new("stdMatBaseTextureName", texture_name));
 		txmt.txtr_names.push(SevenBitString::new(texture_name));
 		txmt

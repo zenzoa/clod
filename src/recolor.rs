@@ -140,8 +140,11 @@ fn create_outfit_template(package: &Dbpf) -> Result<OutfitRecolor, Box<dyn Error
 	})
 }
 
-pub fn recolor_outfit_from_mesh(file: PathBuf, title: Option<String>, number: Option<usize>, part: String, age_gender: String, category: Option<String>, shoe: Option<String>) -> Result<(), Box<dyn Error>> {
-	let package = Dbpf::read_from_file(&file, "")?;
+pub fn recolor_outfit_from_mesh(files: Vec<PathBuf>, title: Option<String>, number: Option<usize>, part: String, age_gender: String, category: Option<String>, shoe: Option<String>) -> Result<(), Box<dyn Error>> {
+	let file = &files[0];
+	let repo_files = &files[1..];
+
+	let package = Dbpf::read_from_file(file, "")?;
 
 	let cres_id = package.resources.iter().find_map(|r| {
 		if let DecodedResource::Cres(cres) = r {
@@ -185,7 +188,9 @@ pub fn recolor_outfit_from_mesh(file: PathBuf, title: Option<String>, number: Op
 
 	let mut rng = rand::rng();
 
-	for i in 0..number.unwrap_or(1) {
+	let number = if repo_files.is_empty() { number.unwrap_or(1) } else { repo_files.len() };
+
+	for i in 0..number {
 		let spec = OutfitSpec {
 			guid: rng.random(),
 			name: title.replace(' ', "_").to_lowercase(),
@@ -197,7 +202,18 @@ pub fn recolor_outfit_from_mesh(file: PathBuf, title: Option<String>, number: Op
 			shoe,
 			subsets: subsets.clone()
 		};
-		let recolor = create_outfit_recolor_from_mesh(&spec, &cres_id, &shpe_id, i);
+		let mut repo_ids: Vec<Identifier> = Vec::new();
+		if let Some(repo_file) = repo_files.get(i) {
+			let recolor_package = Dbpf::read_from_file(&repo_file, "")?;
+			repo_ids = recolor_package.resources.iter().find_map(|r| {
+				if let DecodedResource::Idr(idr) = r {
+					Some(idr.txmt_refs.clone())
+				} else {
+					None
+				}
+			}).unwrap_or(Vec::new());
+		}
+		let recolor = create_outfit_recolor_from_mesh(&spec, &cres_id, &shpe_id, i, repo_ids);
 		let path = file.with_file_name(format!("{filename}_{:02}.package", i+1));
 		recolor.save(&path)?;
 	}
@@ -205,7 +221,7 @@ pub fn recolor_outfit_from_mesh(file: PathBuf, title: Option<String>, number: Op
 	Ok(())
 }
 
-fn create_outfit_recolor_from_mesh(spec: &OutfitSpec, cres_id: &Identifier, shpe_id: &Identifier, i: usize) -> OutfitRecolor {
+fn create_outfit_recolor_from_mesh(spec: &OutfitSpec, cres_id: &Identifier, shpe_id: &Identifier, i: usize, repo_ids: Vec<Identifier>) -> OutfitRecolor {
 	let mut gzps = spec.to_gzps();
 	gzps.id.group_id = spec.guid;
 	gzps.id.resource_id = 0;
@@ -218,33 +234,47 @@ fn create_outfit_recolor_from_mesh(spec: &OutfitSpec, cres_id: &Identifier, shpe
 	let text_list = TextList::from_string(&numbered_name, spec.guid);
 	let resource_title = numbered_name.replace('_', ".");
 
-	let txmts = spec.subsets.iter().map(|subset| {
-		match subset.as_str() {
-			"top" | "bottom" | "body" =>
-				Txmt::create_textureless(spec.guid, &format!("{resource_title}-{subset}"), "SimSkin"),
-			_ =>
-				Txmt::create_textured(&format!(
-					"##0x{:08x}!{resource_title}-{subset}_txtr", spec.guid),
-					spec.guid,
-					&format!("{resource_title}-{subset}"),
-					"SimStandardMaterial"
-				)
-		}
-	}).collect::<Vec<Txmt>>();
+	let txmts = if repo_ids.is_empty() {
+		spec.subsets.iter().map(|subset| {
+			match subset.as_str() {
+				"top" | "bottom" | "body" =>
+					Txmt::create_textureless(spec.guid, &format!("{resource_title}-{subset}"), "SimSkin"),
+				_ =>
+					Txmt::create_textured(&format!(
+						"##0x{:08x}!{resource_title}-{subset}", spec.guid),
+						spec.guid,
+						&format!("{resource_title}-{subset}"),
+						"SimStandardMaterial"
+					)
+			}
+		}).collect::<Vec<Txmt>>()
+	} else {
+		Vec::new()
+	};
 
-	let txtrs = spec.subsets.iter().filter_map(|subset| {
-		match subset.as_str() {
-			"top" | "bottom" | "body" => None,
-			_ => Some(Txtr::create_empty(spec.guid, &format!("{resource_title}-{subset}"), TxtrPurpose::Outfit))
-		}
-	}).collect::<Vec<Txtr>>();
+	let txtrs = if repo_ids.is_empty() {
+		spec.subsets.iter().filter_map(|subset| {
+			match subset.as_str() {
+				"top" | "bottom" | "body" => None,
+				_ => Some(Txtr::create_empty(spec.guid, &format!("{resource_title}-{subset}"), TxtrPurpose::Outfit))
+			}
+		}).collect::<Vec<Txtr>>()
+	} else {
+		Vec::new()
+	};
+
+	let txmt_refs = if repo_ids.is_empty() {
+		txmts.iter().map(|txmt| txmt.id.clone()).collect()
+	} else {
+		repo_ids
+	};
 
 	let idr = Idr {
 		id: Identifier::new(u32::from(TypeId::Idr), spec.guid, 0, 1),
 		cres_ref: Some(cres_id.clone()),
 		shpe_ref: Some(shpe_id.clone()),
-		txmt_refs: txmts.iter().map(|txmt| txmt.id.clone()).collect(),
-		ui_ref: Some(Identifier::new(u32::from(TypeId::Idr), spec.guid, 0, 1)),
+		txmt_refs,
+		ui_ref: Some(Identifier::new(u32::from(TypeId::Ui), 0, 0, 0)),
 		str_ref: Some(text_list.id.clone()),
 		coll_ref: Some(Identifier::new(u32::from(TypeId::Coll), 0x0FFEFEFE, 0x00000000, 0x0FFE0080)),
 		gzps_ref: Some(gzps.id.clone())
