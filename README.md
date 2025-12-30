@@ -142,8 +142,26 @@ WARNING: Highly experimental!
 - The original file will be backed up with the extension `.package.bak`.
 
 ## Create TS2 Outfit Recolors
+### From an existing recolor
 - Open a terminal and navigate to the folder containing the outfit package file(s) you want to recolor.
-- Launch CLOD with the file name of one of the existing recolors, which will be used as a template. Use the `-t/--title` parameter to give your recolors a name, and the `-n/--number` to tell CLOD how many new recolors to make. For example: `clod recolor-outfit ./SalemAF_black.package -n 3 -t "my_Salem"` will generate the files my_SalemAF_01.package, my_SalemAF_02.package, and my_SalemAF_03.package.
-- You can make recolors for multiple ages at once by specifying multiple file names. For example: `clod recolor-outfit ./SalemAF_black.package ./SalemTF_black.package ./SalemEF_black.package -n 1 -t "my_Salem"` will generate the files my_SalemAF_01.package, my_SalemTF_01.package, and my_SalemEF_01.package.
-- To make the additional recolors repositoried to the first set, use the `-r/--repo` parameter. For example: `clod recolor-outfit ./SalemAF_black.package ./SalemTF_black.package ./SalemEF_black.package -n 1 -t "my_Salem" -r` will generate the files my_SalemAF_01.package, my_SalemTF_01_REPO.package, and my_SalemEF_01_REPO.package.
+- Launch CLOD with the file name of one of the existing recolors, which will be used as a template. Use the `-t/--title` parameter to give your recolors a name, and the `-n/--number` to tell CLOD how many new recolors to make. For example: `clod recolor-outfit-template ./SalemAF_black.package -n 3 -t "my_Salem"` will generate the files my_SalemAF_01.package, my_SalemAF_02.package, and my_SalemAF_03.package.
+- You can make recolors for multiple ages at once by specifying multiple file names. For example: `clod recolor-outfit-template ./SalemAF_black.package ./SalemTF_black.package ./SalemEF_black.package -n 1 -t "my_Salem"` will generate the files my_SalemAF_01.package, my_SalemTF_01.package, and my_SalemEF_01.package.
+- To make the additional recolors repositoried to the first set, use the `-r/--repo` parameter. For example: `clod recolor-outfit-template ./SalemAF_black.package ./SalemTF_black.package ./SalemEF_black.package -n 1 -t "my_Salem" -r` will generate the files my_SalemAF_01.package, my_SalemTF_01_REPO.package, and my_SalemEF_01_REPO.package.
+- You will still need to replace the textures in an external program, like YAPE or SimPE.
+
+### From a mesh
+- Open a terminal and navigate to the folder containing the outfit mesh you want to recolor.
+- Launch CLOD with the mesh filename, plus the required arguments `-p/--part` (`top`, `bottom`, or `body`) and `-a/--age-gender` (eg. `am`, `ef`, `cu`, etc.). For example: `clod recolor-outfit-mesh -p body -a af ./SalemAF_MESH.package`
+- You can set the category with the `-c/--category` argument. See Properties File above for the list of category values, and multiple categories can be given if separated by an underscore. For example: `clod recolor-outfit-mesh -p body -a af -c everyday_formal ./SalemAF_MESH.package`
+- You can set the shoe type with the `-s/--shoe` argument. Values include `none`, `boots`, `heels`, `normal`, `sandals`, `pajamas`, and `armor`. For example: `clod recolor-outfit-mesh -p body -a af -s heels ./SalemAF_MESH.package`
+- To make multiple recolors, use the `-n/--number` argument. For example: `clod recolor-outfit-mesh -p body -a af -n 6 ./SalemAF_MESH.package`
+- Alternatively you can repository recolors to existing ones by listing the recolor files after the mesh. For example: `clod recolor-outfit-mesh -p body -a tf ./SalemTF_MESH.package ./SalemAF_black.package ./SalemAF_green.package ./SalemAF_white.package`
+- You can set the name of the recolor with the `-t/--title` argument. This will show up as a tooltip with the recolor index appended (eg. `sg_salem_af_03`). For example: `clod recolor-outfit-mesh -p body -a af -n 6 -t "sg_salem_af" ./SalemAF_MESH.package`
+
+## Create TS2 Object Recolor
+- Open a terminal and navigate to the folder containing the object you want to recolor.
+- Launch CLOD with the object filename. For example: `clod recolor-object ./FancyPainting.package`
+- Create multiple recolors in one package by using the `-n/--number` argument. For example: `clod recolor-object -n 12 ./FancyPainting.package`
+- Use the `-t/--title` argument to set the internal name of the recolors instead of using the filename (used to name the resources combined with a random guid). For example: `clod recolor-object -t "sg.fancypainting.fridakahloart" ./FancyPainting.package`
+- By default, recolor packages will include all subsets. To specify a subset, use the `-s/--subset` argument. For example: `clod recolor-object -t "sg.fancypainting.fridakahloart" -s canvas ./FancyPainting.package`
 - You will still need to replace the textures in an external program, like YAPE or SimPE.
