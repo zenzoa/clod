@@ -137,6 +137,20 @@ enum Command {
 		/// Shoe type ("none", "boots", "heels", "normal", "sandals", "pajamas", "armor")
 		#[arg(short, long)]
 		shoe: Option<String>
+	},
+	/// Create one or more object recolors
+	RecolorObject {
+		/// Package file for the object you want to recolor
+		file: PathBuf,
+		/// Title for recolors
+		#[arg(short, long)]
+		title: Option<String>,
+		/// Number of recolor packages to make
+		#[arg(short, long)]
+		number: Option<usize>,
+		/// Specify subset to recolor; otherwise recolors will include all subsets
+		#[arg(short, long)]
+		subset: Option<String>,
 	}
 }
 
@@ -165,10 +179,13 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 			compressor::compress_packages(files)
 		}
 		Some(Command::RecolorOutfitTemplate{ files, title, number, repo }) => {
-			recolor::recolor_outfit_from_template(files, title, number, repo)
+			recolor::recolor_outfit::recolor_outfit_from_template(files, title, number, repo)
 		}
 		Some(Command::RecolorOutfitMesh{ files, title, number, part, age_gender, category, shoe }) => {
-			recolor::recolor_outfit_from_mesh(files, title, number, part, age_gender, category, shoe)
+			recolor::recolor_outfit::recolor_outfit_from_mesh(files, title, number, part, age_gender, category, shoe)
+		}
+		Some(Command::RecolorObject { file, title, number, subset }) => {
+			recolor::recolor_object::recolor_object(file, title, number, subset)
 		}
 		None => Err("No command given.".into())
 	}

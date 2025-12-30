@@ -1,6 +1,6 @@
 [package]
 name = "clod"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2024"
 
 [dependencies]
@@ -12,3 +12,4 @@ refpack = "5.0.2"
 regex = "1.11"
 crc-any = "2.5"
 rand = "0.9"
+rust-embed="8.9.0"

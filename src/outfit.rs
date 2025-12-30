@@ -87,8 +87,10 @@ impl Outfit {
 		let gmnd = if let Some(shpe) = &shpe {
 			resources.iter().find_map(|res| -> Option<Gmnd> {
 				if let DecodedResource::Gmnd(gmnd) = res {
-					if gmnd.id == shpe.gmnd_ref {
-						return Some(gmnd.clone());
+					if let Some(gmnd_ref) = &shpe.gmnd_ref {
+						if gmnd.id == *gmnd_ref {
+							return Some(gmnd.clone());
+						}
 					}
 				}
 				None
@@ -98,7 +100,11 @@ impl Outfit {
 		};
 
 		if !ignore_missing && shpe.is_some() && gmnd.is_none() {
-			return Err(format!("Missing {}", shpe.unwrap().gmnd_ref).into());
+			if let Some(gmnd_ref) = shpe.unwrap().gmnd_ref {
+				return Err(format!("Missing {gmnd_ref}").into());
+			} else {
+				return Err("Missing GMND ref".into());
+			}
 		}
 
 		// find GMDC

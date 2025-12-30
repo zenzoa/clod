@@ -11,6 +11,7 @@ use crate::dbpf::resource_types::gmnd::Gmnd;
 use crate::dbpf::resource_types::shpe::Shpe;
 use crate::dbpf::resource_types::cres::Cres;
 
+use crate::dbpf::resource_types::mmat::Mmat;
 use crate::dbpf::resource_types::txmt::Txmt;
 use crate::dbpf::resource_types::txtr::Txtr;
 
@@ -27,6 +28,7 @@ pub enum DecodedResource {
 	Gmnd(Gmnd),
 	Shpe(Shpe),
 	Cres(Cres),
+	Mmat(Mmat),
 	Txmt(Txmt),
 	Txtr(Txtr),
 	Gzps(Gzps),
@@ -44,6 +46,7 @@ impl DecodedResource {
 			TypeId::Gmnd => Ok(DecodedResource::Gmnd(Gmnd::new(resource)?)),
 			TypeId::Shpe => Ok(DecodedResource::Shpe(Shpe::new(resource)?)),
 			TypeId::Cres => Ok(DecodedResource::Cres(Cres::new(resource)?)),
+			TypeId::Mmat => Ok(DecodedResource::Mmat(Mmat::new(resource)?)),
 			TypeId::Txmt => Ok(DecodedResource::Txmt(Txmt::new(resource)?)),
 			TypeId::Txtr => Ok(DecodedResource::Txtr(Txtr::new(resource)?)),
 			TypeId::Gzps => Ok(DecodedResource::Gzps(Gzps::new(resource, title)?)),
@@ -61,6 +64,7 @@ impl DecodedResource {
 			Self::Gmnd(gmnd) => { gmnd.to_bytes() }
 			Self::Shpe(shpe) => { shpe.to_bytes() }
 			Self::Cres(cres) => { cres.to_bytes() }
+			Self::Mmat(mmat) => { mmat.to_bytes() }
 			Self::Txmt(txmt) => { txmt.to_bytes() }
 			Self::Txtr(txtr) => { txtr.to_bytes() }
 			Self::Gzps(gzps) => { gzps.to_bytes() }
@@ -78,6 +82,7 @@ impl DecodedResource {
 			Self::Gmnd(gmnd) => { gmnd.id.clone() }
 			Self::Shpe(shpe) => { shpe.id.clone() }
 			Self::Cres(cres) => { cres.id.clone() }
+			Self::Mmat(mmat) => { mmat.id.clone() }
 			Self::Txmt(txmt) => { txmt.id.clone() }
 			Self::Txtr(txtr) => { txtr.id.clone() }
 			Self::Gzps(gzps) => { gzps.id.clone() }

@@ -8,6 +8,7 @@ pub mod gmnd;
 pub mod shpe;
 pub mod cres;
 
+pub mod mmat;
 pub mod txmt;
 pub mod txtr;
 
