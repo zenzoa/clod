@@ -173,13 +173,19 @@ pub fn recolor_outfit_from_mesh(files: Vec<PathBuf>, title: Option<String>, numb
 	let filename = file.file_stem().unwrap().to_string_lossy().replace("_MESH", "").replace("_Mesh", "").replace("_mesh", "");
 	let title = title.unwrap_or(filename.clone());
 
-	let parts = Part::from_string(&part);
+	let mut parts = Part::from_string(&part);
+	if parts.is_empty() {
+		parts = vec![Part::Body];
+	}
 
 	let (age_string, gender_string) = age_gender.split_at(1);
 	let ages = Age::from_string(age_string);
 	let genders = Gender::from_string(gender_string);
 
-	let categories = category.map_or(vec![], |c| Category::from_string(&c));
+	let mut categories = category.map_or(vec![], |c| Category::from_string(&c));
+	if categories.is_empty() {
+		categories = vec![Category::Everyday];
+	}
 
 	let shoe = shoe.map_or_else(|| match parts[0] {
 		Part::Bottom | Part::Body => Shoe::Normal,

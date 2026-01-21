@@ -80,6 +80,11 @@ impl GzpsSettings {
 		// set categories
 		if let Some(categories) = &self.categories {
 			gzps.categories = categories.clone();
+			if let Some(preg_index) = gzps.categories.iter().position(|c| *c == Category::Maternity) {
+				if !gzps.ages.contains(&Age::Adult) && !gzps.ages.contains(&Age::YoungAdult) {
+					gzps.categories.remove(preg_index);
+				}
+			}
 		}
 	}
 }
