@@ -131,7 +131,7 @@ enum Command {
 		/// Age and gender (eg. "am", "ef", or "cu")
 		#[arg(short, long)]
 		age_gender: String,
-		/// Category ("everyday", "swim", "sleep", "formal", "underwear", "maternity", "active", "outerwear") or multiple categories separated by "_" (eg. "everyday_formal")
+		/// Category ("everyday", "swim", "sleep", "formal", "underwear", "pregnant", "active", "outerwear") or multiple categories separated by "_" (eg. "everyday_formal")
 		#[arg(short, long)]
 		category: Option<String>,
 		/// Shoe type ("none", "boots", "heels", "normal", "sandals", "pajamas", "armor")
@@ -141,6 +141,20 @@ enum Command {
 	/// Create one or more object recolors
 	RecolorObject {
 		/// Package file for the object you want to recolor
+		file: PathBuf,
+		/// Title for recolors
+		#[arg(short, long)]
+		title: Option<String>,
+		/// Number of recolor packages to make
+		#[arg(short, long)]
+		number: Option<usize>,
+		/// Specify subset to recolor; otherwise recolors will include all subsets
+		#[arg(short, long)]
+		subset: Option<String>,
+	},
+	/// Create new object recolors from an existing recolor
+	CloneObjectRecolor {
+		/// Package file for the recolor you want to clone
 		file: PathBuf,
 		/// Title for recolors
 		#[arg(short, long)]
@@ -186,6 +200,9 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
 		}
 		Some(Command::RecolorObject { file, title, number, subset }) => {
 			recolor::recolor_object::recolor_object(file, title, number, subset)
+		}
+		Some(Command::CloneObjectRecolor { file, title, number, subset }) => {
+			recolor::recolor_object::clone_recolor(file, title, number, subset)
 		}
 		None => Err("No command given.".into())
 	}

@@ -47,7 +47,7 @@ pub fn recolor_object(file: PathBuf, title: Option<String>, number: Option<usize
 
 	let default_mmats = package.resources.iter().filter_map(|res| {
 		if let DecodedResource::Mmat(mmat) = res {
-			if mmat.default_material {
+			if mmat.default_material && subset.as_ref().is_none_or(|s| *s == mmat.subset_name.to_string()) {
 				println!("Found subset {}", mmat.subset_name);
 				return Some(mmat.clone());
 			}
@@ -55,7 +55,41 @@ pub fn recolor_object(file: PathBuf, title: Option<String>, number: Option<usize
 		None
 	}).collect::<Vec<Mmat>>();
 
-	let default_colors = default_mmats.iter().filter_map(|mmat| {
+	let default_colors = get_recolors(&package, &default_mmats);
+
+	let number = number.unwrap_or(1);
+	let title = title.unwrap_or(file.file_stem().unwrap().to_string_lossy().to_string());
+
+	let resources = make_recolors(&default_colors, number, &title);
+	save_recolors(&file, resources, &title)
+}
+
+pub fn clone_recolor(file: PathBuf, title: Option<String>, number: Option<usize>, subset: Option<String>) -> Result<(), Box<dyn Error>> {
+	let package = Dbpf::read_from_file(&file, "")?;
+
+	let mut subsets = Vec::new();
+	let mut mmats = Vec::new();
+	for resource in &package.resources {
+		if let DecodedResource::Mmat(mmat) = resource {
+			if !subsets.contains(&mmat.subset_name) && subset.as_ref().is_none_or(|s| *s == mmat.subset_name.to_string()) {
+				println!("Found subset {}", mmat.subset_name);
+				subsets.push(mmat.subset_name.clone());
+				mmats.push(mmat.clone());
+			}
+		}
+	}
+
+	let base_colors = get_recolors(&package, &mmats);
+
+	let number = number.unwrap_or(1);
+	let title = title.unwrap_or(file.file_stem().unwrap().to_string_lossy().to_string());
+
+	let resources = make_recolors(&base_colors, number, &title);
+	save_recolors(&file, resources, &title)
+}
+
+fn get_recolors(package: &Dbpf, mmats: &[Mmat]) -> Vec<ObjectRecolor> {
+	mmats.iter().filter_map(|mmat| {
 		let txmt_name = format!("{}_txmt", mmat.name).to_lowercase();
 		if let Some(txmt) = package.resources.iter().find_map(|res| {
 				if let DecodedResource::Txmt(txmt) = res {
@@ -89,46 +123,42 @@ pub fn recolor_object(file: PathBuf, title: Option<String>, number: Option<usize
 			} else {
 				None
 			}
-	}).collect::<Vec<ObjectRecolor>>();
+	}).collect::<Vec<ObjectRecolor>>()
+}
 
+fn make_recolors(base_colors: &[ObjectRecolor], number: usize, title: &str) -> Vec<DecodedResource> {
 	let mut rng = rand::rng();
-
-	let number = number.unwrap_or(1);
-	let title = title.unwrap_or(file.file_stem().unwrap().to_string_lossy().to_string());
-
 	let mut resources = Vec::new();
-
 	for i in 0..number {
 		let guid: u32 = rng.random();
-		for color in &default_colors {
-			if subset.as_ref().is_none_or(|s| *s == color.mmat.subset_name.to_string()) {
-				let mut new_color = color.clone();
+		for color in base_colors {
+			let mut new_color = color.clone();
 
-				new_color.mmat.id.group_id = 0xFFFFFFFF;
-				new_color.mmat.id.resource_id = 0x00000000;
-				new_color.mmat.id.instance_id = 0x00005000 + i as u32;
-				new_color.mmat.default_material = false;
+			new_color.mmat.id.group_id = 0xFFFFFFFF;
+			new_color.mmat.id.resource_id = 0x00000000;
+			new_color.mmat.id.instance_id = 0x00005000 + i as u32;
+			new_color.mmat.default_material = false;
 
-				new_color.txmt.id.group_id =  0x1C050000;
+			new_color.txmt.id.group_id =  0x1C050000;
 
-				if let Some(txtr) = &mut new_color.txtr {
-					txtr.id.group_id = 0x1C050000;
-				}
+			if let Some(txtr) = &mut new_color.txtr {
+				txtr.id.group_id = 0x1C050000;
+			}
 
-				new_color.rename(&title.replace(' ', ".").replace('_', ".").replace('-', "."), &format!("{:08x}", guid));
+			new_color.rename(&title.replace(' ', ".").replace('_', ".").replace('-', "."), &format!("{:08x}", guid));
 
-				resources.push(DecodedResource::Mmat(new_color.mmat));
-				resources.push(DecodedResource::Txmt(new_color.txmt));
-				if let Some(txtr) = new_color.txtr {
-					resources.push(DecodedResource::Txtr(txtr));
-				}
+			resources.push(DecodedResource::Mmat(new_color.mmat));
+			resources.push(DecodedResource::Txmt(new_color.txmt));
+			if let Some(txtr) = new_color.txtr {
+				resources.push(DecodedResource::Txtr(txtr));
 			}
 		}
 	}
+	resources
+}
 
+fn save_recolors(file: &PathBuf, resources: Vec<DecodedResource>, title: &str) -> Result<(), Box<dyn Error>> {
 	let mut package = Dbpf::new(resources)?;
 	package.is_compressed = true;
-	package.write_to_file(&file.with_file_name(format!("{title}_RECS.package")))?;
-
-	Ok(())
+	package.write_to_file(&file.with_file_name(format!("{title}_RECS.package")))
 }
