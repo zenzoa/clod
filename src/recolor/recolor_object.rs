@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use rand::Rng;
@@ -129,14 +130,17 @@ fn get_recolors(package: &Dbpf, mmats: &[Mmat]) -> Vec<ObjectRecolor> {
 fn make_recolors(base_colors: &[ObjectRecolor], number: usize, title: &str) -> Vec<DecodedResource> {
 	let mut rng = rand::rng();
 	let mut resources = Vec::new();
-	for i in 0..number {
+	let mut mmat_id: u32 = 0x00005000;
+	for _ in 0..number {
 		let guid: u32 = rng.random();
+		let mut txtrs_used: HashMap<SevenBitString, SevenBitString> = HashMap::new();
 		for color in base_colors {
 			let mut new_color = color.clone();
 
 			new_color.mmat.id.group_id = 0xFFFFFFFF;
 			new_color.mmat.id.resource_id = 0x00000000;
-			new_color.mmat.id.instance_id = 0x00005000 + i as u32;
+			new_color.mmat.id.instance_id = mmat_id;
+			mmat_id += 1;
 			new_color.mmat.default_material = false;
 
 			new_color.txmt.id.group_id =  0x1C050000;
@@ -146,6 +150,17 @@ fn make_recolors(base_colors: &[ObjectRecolor], number: usize, title: &str) -> V
 			}
 
 			new_color.rename(&title.replace(' ', ".").replace('_', ".").replace('-', "."), &format!("{:08x}", guid));
+
+			if let Some(txtr_ref_og) = color.txmt.block.properties.iter().find(|p| p.name.to_string() == "stdMatBaseTextureName") {
+				if let Some(txtr_ref_new) = new_color.txmt.block.properties.iter_mut().find(|p| p.name.to_string() == "stdMatBaseTextureName") {
+					if let Some(used_txtr) = txtrs_used.get(&txtr_ref_og.value) {
+						txtr_ref_new.value = used_txtr.clone();
+						new_color.txtr = None;
+					} else {
+						txtrs_used.insert(txtr_ref_og.value.clone(), txtr_ref_new.value.clone());
+					}
+				}
+			}
 
 			resources.push(DecodedResource::Mmat(new_color.mmat));
 			resources.push(DecodedResource::Txmt(new_color.txmt));

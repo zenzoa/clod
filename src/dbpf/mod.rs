@@ -328,7 +328,7 @@ impl SevenBitInt {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SevenBitString(Vec<u8>);
 
 impl fmt::Display for SevenBitString {
