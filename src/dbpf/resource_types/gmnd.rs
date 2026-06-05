@@ -8,25 +8,43 @@ use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
 use crate::dbpf::resource_types::nodes::sg_resource::SGResource;
 use crate::dbpf::resource_types::nodes::object_graph::ObjectGraphNode;
+use crate::dbpf::resource_types::nodes::data_list::DataListNodeItemValue;
 
 #[derive(Clone)]
 pub struct Gmnd {
 	pub id: Identifier,
 	pub gmdc_ref: Identifier,
+	pub repo_subsets: Vec<(String, String)>,
 	pub data: Vec<u8>
 }
 
 impl Gmnd {
 	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let rcol = Rcol::read(&resource.data)?;
+
+		let mut repo_subsets = Vec::new();
+		for block in &rcol.blocks {
+			if let RcolBlock::DataList(datalist) = block {
+				if datalist.title.to_string() == "tsDesignModeSlaveSubsets" {
+					for item in &datalist.items {
+						if let DataListNodeItemValue::String(repo_subset) = &item.value {
+							repo_subsets.push((item.name.to_string(), repo_subset.to_string()));
+						}
+					}
+				}
+			}
+		}
+
 		if !rcol.blocks.is_empty() {
 			let gmdc_ref = (*rcol.links.first().ok_or("GMDC reference not found.")?).clone();
 			return Ok(Self {
 				id: resource.id.clone(),
 				gmdc_ref,
+				repo_subsets,
 				data: resource.data.clone()
 			});
 		}
+
 		Err("Invalid GMND resource.".into())
 	}
 
@@ -63,7 +81,8 @@ impl GmndBlock {
 		let mut subblocks = Vec::new();
 		for _ in 0..num_subblocks {
 			let subblock_id = u32::read_le(cur)?;
-			subblocks.push(RcolBlock::read(cur, subblock_id)?);
+			let subblock = RcolBlock::read(cur, subblock_id)?;
+			subblocks.push(subblock);
 		}
 
 		let gmnd = Self {

@@ -21,19 +21,10 @@ impl Txmt {
 		let rcol = Rcol::read(&resource.data)?;
 		if rcol.blocks.len() == 1 {
 			if let RcolBlock::Txmt(txmt_block) = &rcol.blocks[0] {
-				let txtr_names: Vec<SevenBitString> = txmt_block.properties
-					.iter()
-					.filter_map(|prop|
-						if &prop.name.to_string() == "stdMatBaseTextureName" ||
-							&prop.name.to_string() == "stdMatNormalMapTextureName" {
-								Some(prop.value.clone())
-						} else {
-							None
-						}).collect();
 				return Ok(Self {
 					id: resource.id.clone(),
 					block: txmt_block.clone(),
-					txtr_names
+					txtr_names: txmt_block.get_txtr_names()
 				})
 			}
 		}
@@ -103,7 +94,22 @@ impl Txmt {
 				_ => {}
 			}
 		}
+		new_txmt.txtr_names = new_txmt.block.get_txtr_names();
 		new_txmt
+	}
+
+	pub fn rename(&mut self, old_name: &str, new_name: &str) {
+		self.block.material_definition = self.block.material_definition.replace(&old_name, &new_name);
+		self.block.material_description = self.block.material_description.replace(&old_name, &new_name);
+		for prop in self.block.properties.iter_mut() {
+			if prop.name.to_string() == "stdMatBaseTextureName" {
+				prop.value = prop.value.replace(&old_name, &new_name);
+			}
+		}
+		self.txtr_names = self.block.get_txtr_names();
+		let txmt_name = self.block.material_definition.to_string();
+		self.id.resource_id = hash_crc32(&txmt_name);
+		self.id.instance_id = hash_crc24(&txmt_name);
 	}
 }
 
@@ -190,5 +196,18 @@ impl TxmtBlock {
 		}
 
 		Ok(())
+	}
+
+	pub fn get_txtr_names(&self) -> Vec<SevenBitString> {
+		self.properties
+			.iter()
+			.filter_map(|prop|
+				if &prop.name.to_string() == "stdMatBaseTextureName" ||
+					&prop.name.to_string() == "stdMatNormalMapTextureName" {
+						Some(prop.value.clone())
+				} else {
+					None
+				})
+			.collect()
 	}
 }

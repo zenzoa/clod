@@ -3,14 +3,12 @@ use std::io::Cursor;
 
 use crate::dbpf::{ Identifier, PascalString };
 use crate::dbpf::resource::Resource;
-use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
+use crate::dbpf::resource_types::cpf::{ Cpf, PropertyValue };
 use crate::dbpf::resource_types::gzps::{ Age, Gender, Category, HairTone };
 
 #[derive(Clone, Default)]
 pub struct Xtol {
 	pub id: Identifier,
-	pub cpf_type: CpfType,
-	pub cpf_version: Option<u16>,
 
 	pub version: Option<u32>,
 	pub product: Option<u32>,
@@ -44,8 +42,6 @@ impl Xtol {
 		let cpf = Cpf::read(&resource.data)?;
 		let mut xtol = Self {
 			id: resource.id.clone(),
-			cpf_type: cpf.cpf_type,
-			cpf_version: cpf.version,
 			..Self::default()
 		};
 
@@ -203,12 +199,7 @@ impl Xtol {
 			props.push(("materialrestypeid".to_string(), PropertyValue::Uint(materialrestype)));
 		}
 
-		let cpf = Cpf {
-			cpf_type: self.cpf_type,
-			version: self.cpf_version,
-			props
-		};
-		cpf.write(&mut cur)?;
+		Cpf::write_props(&props, &mut cur)?;
 
 		Ok(cur.into_inner())
 	}

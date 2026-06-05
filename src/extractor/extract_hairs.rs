@@ -1,170 +1,115 @@
 use std::error::Error;
-use std::path::{ Path, PathBuf };
+use std::path::PathBuf;
 use std::collections::HashMap;
 
 use crate::dbpf::Dbpf;
 use crate::dbpf::resource::DecodedResource;
-use crate::dbpf::resource_types::gzps::{ Gzps, Age, Category, Part, HairTone };
-use crate::dbpf::resource_types::idr::Idr;
+use crate::dbpf::resource_types::gzps::{ Category, Gender, Gzps, Part };
 
-use super::{ get_skin_packages, create_folder };
+use crate::helpers::{ ExtractedOutfit, create_folder, get_gzps_related_resources, get_packages_in_dir, get_resources_in_packages };
 
-#[derive(Clone)]
-struct Hair {
-	gzps: Gzps,
-	idr: Idr
-}
+pub fn extract_hairs(input: Option<PathBuf>, output: Option<PathBuf>, bins: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
+	let input = input.unwrap_or(PathBuf::from("./"));
+	let output = output.unwrap_or(input.clone());
 
-pub fn extract_hairs(input_path: Option<PathBuf>, output_path: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
-	let input_path = input_path.unwrap_or(PathBuf::from("./"));
-	let output_path = output_path.unwrap_or(input_path.clone());
-
-	print!("Reading Skin.package files...");
-	let all_hairs = get_hairs(&input_path)?;
+	print!("Reading Skins.package files...");
+	let hair_packages = get_packages_in_dir(&input)?;
+	let hair_resources = get_resources_in_packages(&hair_packages)?;
 	println!("DONE");
 
-	let mut hairs_by_family: HashMap<String, Vec<Hair>> = HashMap::new();
-	for (_, hair) in all_hairs {
-		let family = hair.gzps.family.to_string();
-		match hairs_by_family.get_mut(&family) {
-			Some(hairs) => { hairs.push(hair.clone()); },
-			None => { hairs_by_family.insert(family, vec![hair.clone()]); }
+	if bins.is_some() { print!("Reading globalcatbin.bundle.package files..."); }
+	let bin_packages = match &bins {
+		Some(bins_path) => get_packages_in_dir(bins_path)?,
+		None => Vec::new()
+	};
+	let bin_resources = get_resources_in_packages(&bin_packages)?;
+	if bins.is_some() { println!("DONE"); }
+
+	print!("Looking for hair GZPS resources...");
+	let gzps_list = hair_resources.iter()
+		.filter_map(|r|
+			match r {
+				DecodedResource::Gzps(gzps) =>
+					if gzps.species == 1 &&
+						gzps.parts.contains(&Part::Hair) &&
+						!gzps.categories.contains(&Category::Skin) &&
+						!gzps.ages.is_empty() &&
+						!gzps.genders.is_empty() {
+							Some(gzps.clone())
+						} else {
+							None
+						},
+				_ => None
+			})
+		.collect::<Vec<Gzps>>();
+	println!("DONE");
+
+	if bins.is_some() {
+		print!("Finding corresponding 3IDR resources...");
+	} else {
+		print!("Finding corresponding 3IDR and BINX resources...");
+	}
+	let mut hair_groups: HashMap<String, Vec<ExtractedOutfit>> = HashMap::new();
+	for gzps in gzps_list {
+		let (gzps_idr, binx_idr, binx) = get_gzps_related_resources(&gzps.id, &hair_resources, &bin_resources);
+
+		let group_name = lookup_group(&gzps.family.to_string());
+		let hair = ExtractedOutfit {
+			gzps,
+			gzps_idr,
+			binx,
+			binx_idr
+		};
+
+		if let Some(hair_group) = hair_groups.get_mut(&group_name) {
+			hair_group.push(hair);
+		} else {
+			hair_groups.insert(group_name, vec![hair]);
 		}
 	}
+	println!("DONE");
 
-	for (family, hairs) in hairs_by_family.iter_mut() {
-		let is_hat = hairs.iter().any(|h| h.gzps.flags & 2 > 0);
+	print!("Saving resources as new packages...");
+	for (group_name, hairs) in hair_groups.iter() {
+		for hair in hairs {
+			let hair_name = format!("{}_{:08X}", hair.gzps.name, hair.gzps.id.instance_id);
 
-		let adult_youngadult_combined = hairs.iter()
-			.any(|h| h.gzps.ages.contains(&Age::Adult) && h.gzps.ages.contains(&Age::YoungAdult));
-
-		let mut hat_ages = Vec::new();
-		for hair in hairs.iter() {
-			if hair.gzps.flags & 2 > 0 {
-				for age in &hair.gzps.ages {
-					if !hat_ages.contains(&age) {
-						hat_ages.push(age);
-					}
-				}
-			}
-		}
-
-		let is_special_color = hairs.iter()
-			.any(|h| h.gzps.hairtone == HairTone::Other && !h.gzps.name.to_string().contains("bald_bare"));
-
-		let group_name = lookup_group(family);
-
-		let folder_path = create_folder(&output_path, &group_name)?;
-
-		for hair in hairs.iter() {
-			let hair_name = hair.gzps.hair_name();
-
-			let duplicates_combined_age = adult_youngadult_combined &&
-				(hair.gzps.ages.contains(&Age::Adult) || hair.gzps.ages.contains(&Age::YoungAdult)) &&
-				(hair.gzps.ages.len() == 1);
-
-			let mut duplicates_hat_age = false;
-			if is_hat && hair.gzps.flags & 2 == 0 && !hair_name.contains("santacap") {
-				for age in &hair.gzps.ages {
-					if hat_ages.contains(&age) {
-						duplicates_hat_age = true;
-						break;
-					}
-				}
-			}
-			if hair_name.contains("_nohat_") {
-				duplicates_hat_age = true;
-			}
-
-			let wrong_color = (is_special_color && hair.gzps.hairtone != HairTone::Other) ||
-				(!is_special_color && hair.gzps.hairtone == HairTone::Other);
-
-			let extension = if duplicates_combined_age || duplicates_hat_age || wrong_color {
-				".package.off"
+			let actual_group_name = if group_name.starts_with("fhair_hatmascotknight") && hair.gzps.genders.contains(&Gender::Male) {
+				group_name.replace("fhair", "mhair")
+			} else if hair_name.contains("fhairhatballcapnpc_fastfood") {
+				"fhair_hatballcapnpc_fastfood".to_string()
+			} else if hair_name.contains("mhairhatballcapnpc_fastfood") {
+				"mhair_hatballcapnpc_fastfood".to_string()
+			} else if hair_name.contains("mhairsideswoop_black_frosted") {
+				"mhair_sideswoop_black_frosted".to_string()
+			} else if hair_name.contains("mhairsideswoop_blond_flame") {
+				"mhair_sideswoop_blond_flame".to_string()
+			} else if hair_name.contains("mhairsideswoop_brown_flame") {
+				"mhair_sideswoop_brown_flame".to_string()
 			} else {
-				".package"
-			};
-			let file_name = format!("{}{}", hair_name, extension);
-
-			let file_path = if group_name.starts_with("fhair_hatmascotknight") && hair_name.contains("mhair_pompodore") {
-				let alt_folder = create_folder(&output_path, &group_name.replace("fhair", "mhair"))?;
-				alt_folder.join(file_name)
-
-			} else if hair_name.contains("fhair_hatballcapnpc_fastfood") {
-				let alt_folder = create_folder(&output_path, "fhair_hatballcapnpc_fastfood")?;
-				alt_folder.join(file_name)
-
-			} else if hair_name.contains("mhair_hatballcapnpc_fastfood") {
-				let alt_folder = create_folder(&output_path, "mhair_hatballcapnpc_fastfood")?;
-				alt_folder.join(file_name)
-
-			} else if hair_name.contains("mhair_sideswoop_black_frosted") {
-				let alt_folder = create_folder(&output_path, "mhair_sideswoop_black_frosted")?;
-				alt_folder.join(file_name)
-
-			} else if hair_name.contains("mhair_sideswoop_blond_flame") {
-				let alt_folder = create_folder(&output_path, "mhair_sideswoop_blond_flame")?;
-				alt_folder.join(file_name)
-
-			} else if hair_name.contains("mhair_sideswoop_brown_flame") {
-				let alt_folder = create_folder(&output_path, "mhair_sideswoop_brown_flame")?;
-				alt_folder.join(file_name)
-
-			} else {
-				folder_path.join(file_name)
+				group_name.clone()
 			};
 
-			let resources = vec![
-				DecodedResource::Gzps(hair.gzps.clone()),
-				DecodedResource::Idr(hair.idr.clone()),
-			];
-			Dbpf::write_package_file(&resources, &file_path, false)?;
+			let group_path = create_folder(&output, &actual_group_name)?;
+			let file_name = group_path.join(&hair_name).with_extension("package");
+
+			let mut resources = vec![DecodedResource::Gzps(hair.gzps.clone())];
+			if let Some(gzps_idr) = &hair.gzps_idr {
+				resources.push(DecodedResource::Idr(gzps_idr.clone()));
+			}
+			if let Some(binx) = &hair.binx {
+				resources.push(DecodedResource::Binx(binx.clone()));
+			}
+			if let Some(binx_idr) = &hair.binx_idr {
+				resources.push(DecodedResource::Idr(binx_idr.clone()));
+			}
+
+			Dbpf::write_package_file(&resources, &file_name)?;
 		}
 	}
+	println!("DONE");
 
 	Ok(())
-}
-
-fn get_hairs(input_path: &Path) -> Result<HashMap<String, Hair>, Box<dyn Error>> {
-	let mut hairs = HashMap::new();
-	let packages = get_skin_packages(input_path)?;
-	for package in packages {
-		for resource in &package.resources {
-			if let DecodedResource::Gzps(gzps) = resource {
-				for resource2 in &package.resources {
-					if let DecodedResource::Idr(idr) = resource2 {
-						let key = format!("{}_{}_{}", gzps.name, gzps.hairtone.stringify(), &gzps.family);
-						if idr.id.group_id == gzps.id.group_id &&
-							idr.id.instance_id == gzps.id.instance_id &&
-							idr.id.resource_id == gzps.id.resource_id &&
-							gzps.species == 1 &&
-							gzps.parts.contains(&Part::Hair) &&
-							!gzps.categories.contains(&Category::Skin) {
-								hairs.insert(key, Hair {
-									gzps: gzps.clone(),
-									idr: idr.clone()
-								});
-						} else if gzps.family.to_string() == "1495c099-a890-4034-9836-e9eda8a670e7" ||	// thaicrown
-							gzps.family.to_string() == "272bb93f-a544-41ad-8b0e-b6324fe45e5b" ||		// fhair_hatelf_blue
-							gzps.family.to_string() == "edbe8b98-4596-4781-9c47-359e2fa423e2" ||		// fhair_hatelf_green
-							gzps.family.to_string() == "2c0f600b-4726-4171-934b-eb503803054d" ||		// fhair_hatelf_red
-							gzps.family.to_string() == "1a0bf841-f8ad-44ea-a99b-5ffcce8825f8" ||		// mhair_hatelf_blue
-							gzps.family.to_string() == "1135fd5b-b4b7-42b7-b44c-acfc27949aba" ||		// mhair_hatelf_green
-							gzps.family.to_string() == "0c1d74a6-60d4-42a5-baa2-df3b723c9cdd" ||		// mhair_hatelf_red
-							gzps.family.to_string() == "173aa801-b774-4376-9399-637d0dfb14d8" ||		// mrs claus
-							gzps.family.to_string() == "b89bd3d2-0da0-482a-a521-7af57882cc85" ||		// santa cap
-							gzps.family.to_string() == "d44a2ae5-e662-4c2f-b79a-747de4488d9c" {			// santa cap white
-								hairs.insert(key, Hair {
-									gzps: gzps.clone(),
-									idr: Idr::new_empty(&gzps.id)
-								});
-						}
-					}
-				}
-			}
-		}
-	}
-	Ok(hairs)
 }
 
 fn lookup_group(family: &str) -> String {
@@ -418,7 +363,7 @@ fn lookup_group(family: &str) -> String {
 		"5a56f151-5553-4383-94d2-4c84713788a8" => "fhair_maskninja_black",
 		"219e99f1-ca09-41fd-8a6d-7a14ecdfbd50" => "fhair_maskninja_desert",
 		"b7a53665-324b-466f-9d92-49dc1516c5a3" => "fhair_maskninja_red",
-		"801d4c76-ffde-4384-9525-58be71f73ac8" => "fhair_masksuperninja_white",
+		"801d4c76-ffde-4384-9525-58be71f73ac8" => "fhair_masksuperninja",
 		"c7567b70-06f2-46c8-a9e9-129f50c2525c" => "fhair_mediumcenterpart",
 		"62a1173a-b6b2-4ad2-b18e-6eb729aff8c0" => "fhair_meg+simple",
 		"ba5eda8a-dae8-4168-9093-b19f5001cc7a" => "fhair_messedup",
@@ -664,6 +609,9 @@ fn lookup_group(family: &str) -> String {
 		"d32e7fad-acc3-427c-9a1b-238a6d4ee463" => "mhair_hatpirateeyepatch",
 		"0130f5d2-f132-45b1-af35-37d21228ff75" => "mhair_hatpropeller",
 		"c3ac48a9-d016-42c7-977f-a091119520eb" => "mhair_hatsafari",
+		"79947692-e351-4f32-a8ec-75b3aadf7f50" => "mhair_hatsantaeuropean_crimson",
+		"41537194-5ba1-4f8d-9f56-50be9042118c" => "mhair_hatsantaeuropean_green",
+		"6d39cebd-661a-42ca-a95f-87429dcb3ce4" => "mhair_hatsantaeuropean_white",
 		"1d8c883b-34f4-4615-b96f-fe017cfc2025" => "mhair_hatseacaptain",
 		"57e642e9-ee89-4dac-bd87-dc7c0dd1fa9e" => "mhair_hatsnow_darkbrown",
 		"6f6e8243-bab4-4f0d-8369-82a9d8ff59ca" => "mhair_hatsnow_darkred",

@@ -1,20 +1,19 @@
 use std::error::Error;
 use std::io::Cursor;
 
-use crate::dbpf::{ Identifier, PascalString, TypeId };
+use crate::dbpf::{ Identifier, PascalString };
 use crate::dbpf::resource::Resource;
-use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
-use crate::dbpf::resource_types::gzps::Gzps;
+use crate::dbpf::resource_types::cpf::{ Cpf, PropertyValue };
 
 #[derive(Clone)]
 pub struct Binx {
 	pub id: Identifier,
-	pub icon_idx: u32,
-	pub stringset_idx: u32,
-	pub bin_idx: u32,
-	pub object_idx: u32,
-	pub creator_id: PascalString,
-	pub sort_index: i32,
+	pub ui_index: u32,
+	pub text_list_index: u32,
+	pub coll_index: u32,
+	pub gzps_index: u32,
+	pub creator: PascalString,
+	pub sort: i32,
 	pub string_index: u32
 }
 
@@ -22,37 +21,45 @@ impl Binx {
 	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let cpf = Cpf::read(&resource.data)?;
 
-		let icon_idx = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("iconidx") {
+		let ui_index = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("iconidx") {
+			*v
+		} else if let Some(PropertyValue::Uint(v)) = cpf.get_prop("iconid") {
 			*v
 		} else {
-			return Err("BINX has no iconidx value".into());
+			return Err("BINX has no iconid or iconidx value".into())
 		};
 
-		let stringset_idx = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("stringsetidx") {
+		let text_list_index = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("stringsetidx") {
+			*v
+		} else if let Some(PropertyValue::Uint(v)) = cpf.get_prop("stringsetid") {
 			*v
 		} else {
-			return Err("BINX has no stringsetidx value".into());
+			return Err("BINX has no stringsetid or stringsetidx value".into());
 		};
 
-		let bin_idx = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("binidx") {
+		let coll_index = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("binidx") {
+			*v
+		} else if let Some(PropertyValue::Uint(v)) = cpf.get_prop("binid") {
 			*v
 		} else {
-			return Err("BINX has no binidx value".into());
+			return Err("BINX has no binid or binidx value".into());
 		};
 
-		let object_idx = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("objectidx") {
+		let gzps_index = if let Some(PropertyValue::Uint(v)) = cpf.get_prop("objectidx") {
+			*v
+		} else if let Some(PropertyValue::Uint(v)) = cpf.get_prop("objectid") {
 			*v
 		} else {
-			return Err("BINX has no objectidx value".into());
+			return Err("BINX has no objectid or objectidx value".into());
 		};
 
-		let creator_id = if let Some(PropertyValue::String(v)) = cpf.get_prop("creatorid") {
+		let creator = if let Some(PropertyValue::String(v)) = cpf.get_prop("creatorid") {
 			v.clone()
 		} else {
 			PascalString::new("00000000-0000-0000-0000-000000000000")
 		};
 
-		let sort_index = if let Some(PropertyValue::Int(v)) = cpf.get_prop("sortindex") {
+		let sort = if let Some(PropertyValue::Int(v)) = cpf.get_prop("sortindex") {
 			*v
 		} else {
 			0
@@ -66,50 +73,30 @@ impl Binx {
 
 		Ok(Self {
 			id: resource.id.clone(),
-			icon_idx,
-			stringset_idx,
-			bin_idx,
-			object_idx,
-			creator_id,
-			sort_index,
+			ui_index,
+			text_list_index,
+			coll_index,
+			gzps_index,
+			creator,
+			sort,
 			string_index
 		})
-	}
-
-	pub fn from_gzps(gzps: &Gzps) -> Self {
-		let mut id = gzps.id.clone();
-		id.type_id = TypeId::Binx;
-		let key = gzps.max_resource_key();
-		Self {
-			id,
-			icon_idx: key + 1,
-			stringset_idx: key + 2,
-			bin_idx: key + 3,
-			object_idx: key + 4,
-			creator_id: PascalString::new("00000000-0000-0000-0000-000000000000"),
-			sort_index: 0,
-			string_index: 1
-		}
 	}
 
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
 		let mut cur = Cursor::new(Vec::new());
 
-		let cpf = Cpf {
-			cpf_type: CpfType::Normal,
-			version: Some(0),
-			props: vec![
-				("iconidx".to_string(), PropertyValue::Uint(self.icon_idx)),
-				("stringsetidx".to_string(), PropertyValue::Uint(self.stringset_idx)),
-				("binidx".to_string(), PropertyValue::Uint(self.bin_idx)),
-				("objectidx".to_string(), PropertyValue::Uint(self.object_idx)),
-				("creatorid".to_string(), PropertyValue::String(self.creator_id.clone())),
-				("sortindex".to_string(), PropertyValue::Int(self.sort_index)),
-				("stringindex".to_string(), PropertyValue::Uint(self.string_index))
-			]
-		};
+		let props = vec![
+			("iconidx".to_string(), PropertyValue::Uint(self.ui_index)),
+			("stringsetidx".to_string(), PropertyValue::Uint(self.text_list_index)),
+			("binidx".to_string(), PropertyValue::Uint(self.coll_index)),
+			("objectidx".to_string(), PropertyValue::Uint(self.gzps_index)),
+			("creatorid".to_string(), PropertyValue::String(self.creator.clone())),
+			("sortindex".to_string(), PropertyValue::Int(self.sort)),
+			("stringindex".to_string(), PropertyValue::Uint(self.string_index))
+		];
 
-		cpf.write(&mut cur)?;
+		Cpf::write_props(&props, &mut cur)?;
 
 		Ok(cur.into_inner())
 	}

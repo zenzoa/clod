@@ -3,14 +3,13 @@ use std::path::PathBuf;
 
 use clap::{ Parser, Subcommand };
 
+mod helpers;
 mod crc;
 mod dbpf;
 mod outfit;
-mod defaulter;
+mod hair;
+mod object;
 mod extractor;
-mod compressor;
-mod bulk_edit;
-mod recolor;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -23,187 +22,196 @@ struct Args {
 enum Command {
 	/// Generates a default replacement for a TS2 outfit
 	DefaultOutfit {
-		/// Folder containing original outfits, and subfolder(s) containing replacements
-		source: Option<PathBuf>,
-		/// Make the default replacement automatically without using the UI
+		/// Folder containing original outfit template packages
+		original: PathBuf,
+		/// Folder containing replacement outfit packages
 		#[arg(short, long)]
-		auto: bool,
-		/// Hide pack icon in auto mode
-		#[arg(short = 'p', long)]
-		hide_pack_icon: bool
-	},
-	/// Generates a default replacement for a TS2 outfit
-	DefaultHair {
-		/// Folder containing original hairs, and subfolder(s) containing replacements
-		source: Option<PathBuf>,
-		/// Path for default replacement package
+		replacement: Option<PathBuf>,
+		/// Output file path
 		#[arg(short, long)]
 		output: Option<PathBuf>,
-		/// Add ages from replacement hair, even if not included in original hair
+		/// Include extra ages/genders/recolors as decustomized and repo'd
+		#[arg(short = 'e', long)]
+		include_extras: bool,
+		/// Suppress non-error/non-warning output
 		#[arg(short, long)]
-		add_ages: bool,
-		/// Enable for all categories
-		#[arg(short = 'c', long)]
-		all_categories: bool,
-		/// Set whether hair is visible in CAS
-		#[arg(short, long)]
-		visible: Option<bool>,
-		/// Set whether townies can use hair
-		#[arg(short, long)]
-		townified: Option<bool>,
-		/// Set whether hair is a hat
-		#[arg(short = 'H', long)]
-		hat: Option<bool>,
-		/// Use first family value for all hairs
-		#[arg(short = 'f', long)]
-		same_family: bool,
-		/// Hide pack icon
-		#[arg(short = 'p', long)]
-		hide_pack_icon: bool
+		quiet: bool
 	},
-	/// Extracts outfits from game files for use in default replacements
-	ExtractOutfits {
-		/// Folder containing Skin.package files
+
+	/// Generates a default replacement for a TS2 hair
+	DefaultHair {
+		/// Folder containing original hair template packages
+		original: PathBuf,
+		/// Folder containing replacement hair packages
+		#[arg(short, long)]
+		replacement: Option<PathBuf>,
+		/// Folder containing fallback hair packages that will be referenced (but not included) for hidden clones without a replacement
+		#[arg(short, long)]
+		fallback: Option<PathBuf>,
+		/// Output file path
+		#[arg(short, long)]
+		output: Option<PathBuf>,
+		/// Include extra ages/genders/colors as decustomized and repo'd
+		#[arg(short = 'e', long)]
+		include_extras: bool,
+		/// Suppress non-error/non-warning output
+		#[arg(short, long)]
+		quiet: bool
+	},
+
+	/// Extracts object sources from game files for use in default replacements
+	ExtractObjects {
+		/// Sims 2 installation directory
 		input: Option<PathBuf>,
-		/// Folder to extract outfit packages to
+		/// Folder to extract object packages to
 		#[arg(short, long, value_name="FOLDER")]
 		output: Option<PathBuf>
 	},
+
+	/// Extracts outfits from game files for use in default replacements
+	ExtractOutfits {
+		/// Folder containing Skins.package files
+		input: Option<PathBuf>,
+		/// Folder to extract outfit packages to
+		#[arg(short, long, value_name="FOLDER")]
+		output: Option<PathBuf>,
+		/// Folder containing globalcatbin.bundle.package files
+		#[arg(short, long, value_name="FOLDER")]
+		bins: Option<PathBuf>
+	},
+
 	/// Extracts hairs from game files for use in default replacements
 	ExtractHairs {
 		/// Folder containing Skin.package files
 		input: Option<PathBuf>,
 		/// Folder to extract hair packages to
 		#[arg(short, long, value_name="FOLDER")]
-		output: Option<PathBuf>
-	},
-	/// Extracts makeup and unmeshed facial hair from game files for use in default replacements
-	ExtractMakeup {
-		/// Folder containing Skin.package files
-		input: Option<PathBuf>,
-		/// Folder to extract hair packages to
+		output: Option<PathBuf>,
+		/// Folder containing globalcatbin.bundle.package files
 		#[arg(short, long, value_name="FOLDER")]
-		output: Option<PathBuf>
+		bins: Option<PathBuf>
 	},
-	/// Bulk edit GZPS properties in package files
-	EditGZPS {
-		/// List of package files to edit
+
+	/// Create one or more outfit recolors
+	RecolorOutfit {
+		/// Package file for outfit to recolor (mesh or existing recolor)
 		files: Vec<PathBuf>,
-		/// GZPS property name
+		/// Output file path
 		#[arg(short, long)]
-		property: String,
-		/// New GZPS property value
+		output: Option<PathBuf>,
+		/// Create multiple recolors
 		#[arg(short, long)]
-		value: String
+		multiple: Option<usize>,
+		/// Repository recolor(s) to any additional files given as arguments
+		#[arg(short, long)]
+		repo: bool,
+		/// Tooltip text
+		#[arg(short, long)]
+		tooltip: Option<String>,
+		/// Name (not seen in game)
+		#[arg(short, long)]
+		name: Option<String>,
+		/// Age(s) ("p"/"toddler", "c(hild)", "t(een)", "y(oungadult)", "a(dult)", "e(lder)")
+		#[arg(short, long)]
+		age: Option<Vec<String>>,
+		/// Gender ("f(emale)", "m(ale)", "u(nisex)")
+		#[arg(short, long)]
+		gender: Option<String>,
+		/// Category ("e(veryday)", "f(ormal)", "u(nderwear)", "p(ajamas)", "s(wim)", "a(ctive)", "o(uterwear)", "P(regnant)")
+		#[arg(short, long)]
+		category: Option<Vec<String>>,
+		/// Shoe sound ("n(one)", "d(efault)"/"normal", "b(barefoot)", "B"/"boots", "h(eels)", "s(andals)", "p(ajamas)", "a(rmor)")
+		#[arg(short, long)]
+		shoe: Option<String>,
+		/// Part ("f(ullbody)"/"body", "t(op)", "b(ottom)")
+		#[arg(short, long)]
+		part: Option<String>,
+		/// Flags ("h(idden)", "t"/"notownies", "w"/"noworkers", "d(efault)")
+		#[arg(short, long)]
+		flags: Option<Vec<String>>,
+		/// Sort index
+		#[arg(short='S', long)]
+		sort: Option<i32>,
+		/// Textureless subsets
+		#[arg(short='T', long)]
+		textureless: Option<Vec<String>>,
+		/// List TXMTs last in the 3IDR
+		#[arg(short='L', long)]
+		txmts_last: bool,
 	},
-	/// Compresses resources in package files
-	Compress {
-		/// List of package files to compress
-		files: Vec<PathBuf>
-	},
-	/// Create one or more outfit recolors from an existing recolor
-	RecolorOutfitTemplate {
-		/// One recolor package per desired age+gender to use as template
-		files: Vec<PathBuf>,
-		/// Title for recolors
-		#[arg(short, long)]
-		title: Option<String>,
-		/// Number of new recolor packages to make
-		#[arg(short, long)]
-		number: Option<usize>,
-		/// Repository recolors to first age+gender
-		#[arg(short, long)]
-		repo: bool
-	},
-	/// Create one or more outfit recolors from a mesh package
-	RecolorOutfitMesh {
-		/// Mesh package plus any recolor packages to repository to
-		files: Vec<PathBuf>,
-		/// Title for recolors
-		#[arg(short, long)]
-		title: Option<String>,
-		/// Number of new recolor packages to make
-		#[arg(short, long)]
-		number: Option<usize>,
-		/// Outfit part ("top", "bottom", or "body")
-		#[arg(short, long)]
-		part: String,
-		/// Age and gender (eg. "am", "ef", or "cu")
-		#[arg(short, long)]
-		age_gender: String,
-		/// Category ("everyday", "swim", "sleep", "formal", "underwear", "pregnant", "active", "outerwear") or multiple categories separated by "_" (eg. "everyday_formal")
-		#[arg(short, long)]
-		category: Option<String>,
-		/// Shoe type ("none", "boots", "heels", "normal", "sandals", "pajamas", "armor")
-		#[arg(short, long)]
-		shoe: Option<String>
-	},
+
 	/// Create one or more object recolors
 	RecolorObject {
 		/// Package file for the object you want to recolor
 		file: PathBuf,
+		/// Output file path
+		#[arg(short, long)]
+		output: Option<PathBuf>,
 		/// Title for recolors
 		#[arg(short, long)]
-		title: Option<String>,
-		/// Number of recolor packages to make
-		#[arg(short, long)]
-		number: Option<usize>,
+		name: Option<String>,
 		/// Specify subset to recolor; otherwise recolors will include all subsets
 		#[arg(short, long)]
 		subset: Option<String>,
+		/// Create multiple recolors
+		#[arg(short, long)]
+		multiple: Option<usize>
 	},
-	/// Create new object recolors from an existing recolor
-	CloneObjectRecolor {
+
+	/// Create a new object recolor based on an existing one
+	CloneRecolor {
 		/// Package file for the recolor you want to clone
 		file: PathBuf,
-		/// Title for recolors
+		/// Output file path
 		#[arg(short, long)]
-		title: Option<String>,
-		/// Number of recolor packages to make
+		output: Option<PathBuf>,
+		/// Part of the original name (in mmats, txmts, and txtrs) you want to replace
+		#[arg(short='p', long)]
+		old_name: String,
+		/// What to replace old name with
 		#[arg(short, long)]
-		number: Option<usize>,
-		/// Specify subset to recolor; otherwise recolors will include all subsets
+		new_name: String,
+		/// Create multiple recolors
 		#[arg(short, long)]
-		subset: Option<String>,
-	}
+		multiple: Option<usize>
+	},
 }
 
 fn main() -> Result<(), Box<dyn Error + 'static>> {
 	let args = Args::parse();
 	match args.command {
-		Some(Command::DefaultOutfit{ source, auto, hide_pack_icon }) => {
-			defaulter::default_outfit::default_outfit(source, auto, hide_pack_icon)
+		Some(Command::DefaultOutfit{ original, replacement, output, include_extras, quiet }) => {
+			outfit::default_outfit::default_outfit(original, replacement, output, include_extras, quiet)
 		}
-		Some(Command::DefaultHair{ source, output, add_ages, all_categories, visible, townified, hat, hide_pack_icon, same_family }) => {
-			defaulter::default_hair::default_hair(source, output, add_ages, all_categories, visible, townified, hat, hide_pack_icon, same_family)
+
+		Some(Command::DefaultHair{ original, replacement, fallback, output, include_extras, quiet }) => {
+			hair::default_hair::default_hair(original, replacement, fallback, output, include_extras, quiet)
 		}
-		Some(Command::ExtractOutfits{ input, output }) => {
-			extractor::extract_outfits::extract_outfits(input, output)
+
+		Some(Command::ExtractObjects{ input, output }) => {
+			extractor::extract_objects::extract_objects(input, output)
 		}
-		Some(Command::ExtractHairs{ input, output }) => {
-			extractor::extract_hairs::extract_hairs(input, output)
+
+		Some(Command::ExtractOutfits{ input, output, bins }) => {
+			extractor::extract_outfits::extract_outfits(input, output, bins)
 		}
-		Some(Command::ExtractMakeup{ input, output }) => {
-			extractor::extract_makeup::extract_makeup(input, output)
+
+		Some(Command::ExtractHairs{ input, output, bins }) => {
+			extractor::extract_hairs::extract_hairs(input, output, bins)
 		}
-		Some(Command::EditGZPS{ files, property, value }) => {
-			bulk_edit::edit_gzps(files, &property, &value)
-		}
-		Some(Command::Compress{ files }) => {
-			compressor::compress_packages(files)
-		}
-		Some(Command::RecolorOutfitTemplate{ files, title, number, repo }) => {
-			recolor::recolor_outfit::recolor_outfit_from_template(files, title, number, repo)
-		}
-		Some(Command::RecolorOutfitMesh{ files, title, number, part, age_gender, category, shoe }) => {
-			recolor::recolor_outfit::recolor_outfit_from_mesh(files, title, number, part, age_gender, category, shoe)
-		}
-		Some(Command::RecolorObject { file, title, number, subset }) => {
-			recolor::recolor_object::recolor_object(file, title, number, subset)
-		}
-		Some(Command::CloneObjectRecolor { file, title, number, subset }) => {
-			recolor::recolor_object::clone_recolor(file, title, number, subset)
-		}
+
+		Some(Command::RecolorOutfit { files, output, multiple, repo, tooltip, name, age, gender, category, shoe, part, flags, sort, textureless, txmts_last }) => {
+			outfit::recolor_outfit::recolor_outfit(files, output, multiple, repo, tooltip, name, age, gender, category, shoe, part, flags, sort, textureless, txmts_last)
+		},
+
+		Some(Command::RecolorObject { file, output, name, subset, multiple }) => {
+			object::recolor_object::recolor_object(file, output, name, subset, multiple)
+		},
+
+		Some(Command::CloneRecolor { file, output, old_name, new_name, multiple }) => {
+			object::recolor_object::clone_recolor(file, output, old_name, new_name, multiple)
+		},
+
 		None => Err("No command given.".into())
 	}
 }

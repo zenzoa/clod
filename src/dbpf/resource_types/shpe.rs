@@ -41,7 +41,7 @@ impl Shpe {
 						None
 					}
 				} else {
-					return Err(format!("{} does not define GMND", resource.id).into());
+					None
 				};
 				return Ok(Self {
 					id: resource.id.clone(),

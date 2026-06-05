@@ -4,85 +4,86 @@ use std::collections::HashMap;
 
 use crate::dbpf::Dbpf;
 use crate::dbpf::resource::DecodedResource;
-use crate::dbpf::resource_types::gzps::{ Gzps, Category, Part };
-use crate::dbpf::resource_types::idr::Idr;
+use crate::dbpf::resource_types::gzps::{ Gzps, Part };
 
-use super::{ get_skin_packages, create_folder };
+use crate::helpers::{ ExtractedOutfit, create_folder, get_gzps_related_resources, get_packages_in_dir, get_resources_in_packages };
 
-#[derive(Clone)]
-struct OriginalOutfit {
-	gzps: Gzps,
-	idr: Option<Idr>
-}
+pub fn extract_outfits(input: Option<PathBuf>, output: Option<PathBuf>, bins: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
+	let input = input.unwrap_or(PathBuf::from("./"));
+	let output = output.unwrap_or(input.clone());
 
-pub fn extract_outfits(input_path: Option<PathBuf>, output_path: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
-	let input_path = input_path.unwrap_or(PathBuf::from("./"));
-	let output_path = output_path.unwrap_or(input_path.clone());
-
-	print!("Reading Skin.package files...");
-	let packages = get_skin_packages(&input_path)?;
-	let outfits = get_outfits(&packages);
+	print!("Reading Skins.package files...");
+	let skin_packages = get_packages_in_dir(&input)?;
+	let skin_resources = get_resources_in_packages(&skin_packages)?;
 	println!("DONE");
 
-	let mut outfit_groups: HashMap<String, Vec<&OriginalOutfit>> = HashMap::new();
-	for outfit in outfits.values() {
-		if outfit.gzps.species == 1 &&
-			!outfit.gzps.categories.contains(&Category::Skin) &&
-			!outfit.gzps.categories.contains(&Category::TryOn) &&
-			!outfit.gzps.categories.contains(&Category::Overlay) &&
-			outfit.gzps.parts.len() == 1 &&
-			!outfit.gzps.name.to_string().contains("fried") &&
-			(outfit.gzps.parts[0] == Part::Body || outfit.gzps.parts[0] == Part::Top || outfit.gzps.parts[0] == Part::Bottom) {
-				let group_name = outfit.gzps.generate_key();
-				if let Some(group) = outfit_groups.get_mut(&group_name) {
-					group.extend_from_slice(&[outfit]);
-				} else {
-					outfit_groups.insert(group_name, vec![outfit]);
-				}
-		}
-	}
+	if bins.is_some() { print!("Reading globalcatbin.bundle.package files..."); }
+	let bin_packages = match &bins {
+		Some(bins_path) => get_packages_in_dir(bins_path)?,
+		None => Vec::new()
+	};
+	let bin_resources = get_resources_in_packages(&bin_packages)?;
+	if bins.is_some() { println!("DONE"); }
 
-	for (group_name, outfits) in outfit_groups {
-		print!("Extracting {group_name}...");
-		let folder_name = format!("{group_name}_{}", outfits.len());
-		let folder_path = create_folder(&output_path, &folder_name)?;
-		for outfit in outfits {
-			let mut resources = vec![DecodedResource::Gzps(outfit.gzps.clone())];
-			if let Some(idr) = &outfit.idr {
-				resources.push(DecodedResource::Idr(idr.clone()));
-			}
-			let hidden = if outfit.gzps.flags & 1 > 0 { "_hidden" } else { "" };
-			let file_name = format!("{}_{}{}", outfit.gzps.name, Category::stringify(&outfit.gzps.categories), hidden);
-			let file_path = folder_path.join(file_name).with_extension("package");
-			Dbpf::write_package_file(&resources, &file_path, false)?;
-		}
-		println!("DONE");
+	print!("Looking for outfit GZPS resources...");
+	let gzps_list = skin_resources.iter()
+		.filter_map(|r|
+			match r {
+				DecodedResource::Gzps(gzps) =>
+					if gzps.species == 1 && (gzps.parts.contains(&Part::Body) || gzps.parts.contains(&Part::Top) || gzps.parts.contains(&Part::Bottom)) {
+						Some(gzps.clone())
+					} else {
+						None
+					},
+				_ => None
+			})
+		.collect::<Vec<Gzps>>();
+	println!("DONE");
+
+	if bins.is_some() {
+		print!("Finding corresponding 3IDR resources...");
+	} else {
+		print!("Finding corresponding 3IDR and BINX resources...");
 	}
+	let mut outfit_groups: HashMap<String, Vec<ExtractedOutfit>> = HashMap::new();
+	for gzps in gzps_list {
+		let (gzps_idr, binx_idr, binx) = get_gzps_related_resources(&gzps.id, &skin_resources, &bin_resources);
+
+		let group_name = gzps.outfit_group_name();
+		let outfit = ExtractedOutfit {
+			gzps,
+			gzps_idr,
+			binx,
+			binx_idr
+		};
+
+		if let Some(outfit_group) = outfit_groups.get_mut(&group_name) {
+			outfit_group.push(outfit);
+		} else {
+			outfit_groups.insert(group_name, vec![outfit]);
+		}
+	}
+	println!("DONE");
+
+	print!("Saving resources as new packages...");
+	for (group_name, outfits) in outfit_groups.iter() {
+		let group_path = create_folder(&output, &format!("{group_name}_{}", outfits.len()))?;
+		for outfit in outfits {
+			let file_name = group_path.join(outfit.gzps.outfit_name()).with_extension("package");
+			let mut resources = vec![DecodedResource::Gzps(outfit.gzps.clone())];
+			if let Some(gzps_idr) = &outfit.gzps_idr {
+				resources.push(DecodedResource::Idr(gzps_idr.clone()));
+			}
+			if let Some(binx) = &outfit.binx {
+				resources.push(DecodedResource::Binx(binx.clone()));
+			}
+			if let Some(binx_idr) = &outfit.binx_idr {
+				resources.push(DecodedResource::Idr(binx_idr.clone()));
+			}
+			Dbpf::write_package_file(&resources, &file_name)?;
+		}
+	}
+	println!("DONE");
 
 	Ok(())
-}
-
-fn get_outfits(packages: &[Dbpf]) -> HashMap<String, OriginalOutfit> {
-	let mut outfits: HashMap<String, OriginalOutfit> = HashMap::new();
-
-	for package in packages {
-		let gzps_list: Vec<Gzps> = package.resources
-			.iter()
-			.filter_map(|r| if let DecodedResource::Gzps(gzps) = r { Some(gzps.clone()) } else { None })
-			.collect();
-		let idr_list: Vec<Idr> = package.resources
-			.iter()
-			.filter_map(|r| if let DecodedResource::Idr(idr) = r { Some(idr.clone()) } else { None })
-			.collect();
-		for gzps in gzps_list {
-			let idr = idr_list
-				.iter()
-				.find(|i| (i.id.group_id, i.id.instance_id, i.id.resource_id) == (gzps.id.group_id, gzps.id.instance_id, gzps.id.resource_id))
-				.cloned();
-			let key = if gzps.parts.contains(&Part::Hair) { gzps.generate_key() } else { gzps.name.to_string() };
-			outfits.insert(key, OriginalOutfit{ gzps, idr });
-		}
-	}
-
-	outfits
 }

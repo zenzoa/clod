@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 use crate::dbpf::{ Identifier, PascalString };
 use crate::dbpf::resource::Resource;
-use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
+use crate::dbpf::resource_types::cpf::{ Cpf, PropertyValue };
 
 #[derive(Clone)]
 pub struct Mmat {
@@ -27,7 +27,7 @@ impl Mmat {
 		let cpf = Cpf::read(&resource.data)?;
 
 		let flags = match cpf.get_prop("flags") {
-			Some(PropertyValue::Uint(val)) => val.clone(),
+			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("MMAT is missing \"flags\" property.".into())
 		};
 
@@ -52,7 +52,7 @@ impl Mmat {
 		};
 
 		let object_guid = match cpf.get_prop("objectGUID") {
-			Some(PropertyValue::Uint(val)) => val.clone(),
+			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("MMAT is missing \"objectGUID\" property.".into())
 		};
 
@@ -62,12 +62,12 @@ impl Mmat {
 		};
 
 		let material_state_flags = match cpf.get_prop("materialStateFlags") {
-			Some(PropertyValue::Uint(val)) => val.clone(),
+			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("MMAT is missing \"materialStateFlags\" property.".into())
 		};
 
 		let object_state_index = match cpf.get_prop("objectStateIndex") {
-			Some(PropertyValue::Int(val)) => val.clone(),
+			Some(PropertyValue::Int(val)) => *val,
 			_ => return Err("MMAT is missing \"objectStateIndex\" property.".into())
 		};
 
@@ -82,7 +82,7 @@ impl Mmat {
 		};
 
 		let default_material = match cpf.get_prop("defaultMaterial") {
-			Some(PropertyValue::Bool(val)) => val.clone(),
+			Some(PropertyValue::Bool(val)) => *val,
 			_ => return Err("MMAT is missing \"defaultMaterial\" property.".into())
 		};
 
@@ -122,14 +122,12 @@ impl Mmat {
 		props.push(("subsetName".to_string(), PropertyValue::String(self.subset_name.clone())));
 		props.push(("defaultMaterial".to_string(), PropertyValue::Bool(self.default_material)));
 
-		let cpf = Cpf {
-			cpf_type: CpfType::Normal,
-			version: Some(2),
-			props
-		};
-
-		cpf.write(&mut cur)?;
+		Cpf::write_props(&props, &mut cur)?;
 
 		Ok(cur.into_inner())
+	}
+
+	pub fn rename(&mut self, old_name: &str, new_name: &str) {
+		self.name = self.name.replace(&old_name, &new_name);
 	}
 }

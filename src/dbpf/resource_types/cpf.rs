@@ -10,18 +10,8 @@ use xmltree::{ XMLNode, Element, ParserConfig };
 
 use crate::dbpf::PascalString;
 
-#[derive(Clone, Copy, Default)]
-pub enum CpfType {
-	#[default]
-	Normal,
-	XmlUint,
-	XmlString
-}
-
 #[derive(Clone)]
 pub struct Cpf {
-	pub cpf_type: CpfType,
-	pub version: Option<u16>,
 	pub props: Vec<(String, PropertyValue)>
 }
 
@@ -38,7 +28,7 @@ impl Cpf {
 	}
 
 	pub fn read_normal(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
-		let version = Some(u16::read_le(cur)?);
+		let _version = u16::read_le(cur)?;
 
 		let num_props = u32::read_le(cur)?;
 
@@ -58,8 +48,6 @@ impl Cpf {
 		}
 
 		Ok(Self {
-			cpf_type: CpfType::Normal,
-			version,
 			props
 		})
 	}
@@ -73,16 +61,12 @@ impl Cpf {
 				.add_entity("", ""),
 		)?;
 
-		let version = match xml.attributes.get("version") {
+		let _version = match xml.attributes.get("version") {
 			Some(str) => Some(str.parse::<u16>()?),
 			None => None
 		};
 
-		let cpf_type = match xml.name.as_str() {
-			"cGZPropertySetUint32" => CpfType::XmlUint,
-			"cGZPropertySetString" => CpfType::XmlString,
-			_ => return Err("Invalid CPF XML root tag.".into()),
-		};
+		let _cpf_type = xml.name.as_str();
 
 		let mut props = Vec::new();
 		for child in xml.children {
@@ -123,7 +107,7 @@ impl Cpf {
 					DataType::Uint => PropertyValue::Uint(
 						match raw_value.strip_prefix("0x") {
 							Some(hex) => u32::from_str_radix(hex, 16)?,
-							None => i32::from_str(&raw_value)? as u32
+							None => i64::from_str(&raw_value)? as u32
 						}
 					),
 					DataType::Int => PropertyValue::Int(
@@ -142,28 +126,18 @@ impl Cpf {
 		}
 
 		Ok(Self {
-			cpf_type,
-			version,
 			props
 		})
 	}
 
-	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-		match self.cpf_type {
-			CpfType::Normal => self.write_normal(writer),
-			CpfType::XmlUint => self.write_xml("cGZPropertySetUint32", writer),
-			CpfType::XmlString => self.write_xml("cGZPropertySetString", writer),
-		}
-	}
-
-	pub fn write_normal(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
+	pub fn write_props(props: &[(String, PropertyValue)], writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		0xCBE750E0u32.write_le(writer)?;
 
-		self.version.unwrap_or(0).write_le(writer)?;
+		2u16.write_le(writer)?;
 
-		(self.props.len() as u32).write_le(writer)?;
+		(props.len() as u32).write_le(writer)?;
 
-		for (prop_name, prop_value) in self.props.iter() {
+		for (prop_name, prop_value) in props.iter() {
 			match prop_value {
 				PropertyValue::Bool(value) => {
 					(DataType::Bool as u32).write_le(writer)?;
@@ -192,46 +166,6 @@ impl Cpf {
 				}
 			}
 		}
-
-		Ok(())
-	}
-
-	pub fn write_xml(&self, root_el_name: &str, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-		let mut root_el = Element::new(root_el_name);
-
-		if let Some(version) = self.version {
-			root_el.attributes.insert("version".to_string(), version.to_string());
-		}
-
-		for (prop_name, prop_value) in &self.props {
-			let data_type = prop_value.get_data_type();
-
-			let mut prop_el = match data_type {
-				DataType::Bool => Element::new("AnyBoolean"),
-				DataType::Uint => Element::new("AnyUint32"),
-				DataType::Int => Element::new("AnySint32"),
-				DataType::Float => Element::new("AnyFloat32"),
-				DataType::String => Element::new("AnyString"),
-			};
-
-			prop_el.attributes.insert("type".to_string(), format!("0x{:x}", data_type as u32));
-
-			prop_el.attributes.insert("key".to_string(), prop_name.to_string());
-
-			prop_el.children.push(XMLNode::Text(
-				match prop_value {
-					PropertyValue::Bool(value) => value.to_string(),
-					PropertyValue::Uint(value) => value.to_string(),
-					PropertyValue::Int(value) => value.to_string(),
-					PropertyValue::Float(value) => value.to_string(),
-					PropertyValue::String(value) => value.to_string()
-				}
-			));
-
-			root_el.children.push(XMLNode::Element(prop_el));
-		}
-
-		root_el.write(writer)?;
 
 		Ok(())
 	}
@@ -270,7 +204,7 @@ impl TryFrom<u32> for DataType {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PropertyValue {
 	Bool(bool),
 	Uint(u32),
@@ -287,18 +221,6 @@ impl fmt::Display for PropertyValue {
 			PropertyValue::Int(value) => write!(f, "{}", value),
 			PropertyValue::Float(value) => write!(f, "{}", value),
 			PropertyValue::String(value) => write!(f, "{}", value)
-		}
-	}
-}
-
-impl PropertyValue {
-	pub fn get_data_type(&self) -> DataType {
-		match self {
-			PropertyValue::Bool(_) => DataType::Bool,
-			PropertyValue::Uint(_) => DataType::Uint,
-			PropertyValue::Int(_) => DataType::Int,
-			PropertyValue::Float(_) => DataType::Float,
-			PropertyValue::String(_) => DataType::String
 		}
 	}
 }

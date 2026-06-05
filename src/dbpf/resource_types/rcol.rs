@@ -11,6 +11,7 @@ use crate::dbpf::resource_types::shpe::ShpeBlock;
 use crate::dbpf::resource_types::cres::CresBlock;
 use crate::dbpf::resource_types::txmt::TxmtBlock;
 use crate::dbpf::resource_types::txtr::TxtrBlock;
+use crate::dbpf::resource_types::nodes::data_list::DataListNode;
 
 pub struct Rcol {
 	pub links: Vec<Identifier>,
@@ -41,7 +42,9 @@ impl Rcol {
 
 		let mut blocks = Vec::new();
 		for block_id in block_ids {
-			blocks.push(RcolBlock::read(&mut cur, block_id)?);
+			if let Ok(block) = RcolBlock::read(&mut cur, block_id) {
+				blocks.push(block);
+			}
 		}
 
 		Ok(Self {
@@ -82,6 +85,7 @@ pub enum RcolBlock {
 	Cres(CresBlock),
 	Txmt(TxmtBlock),
 	Txtr(TxtrBlock),
+	DataList(DataListNode),
 	Unknown(())
 }
 
@@ -112,6 +116,10 @@ impl RcolBlock {
 				let txtr_block = TxtrBlock::read(cur)?;
 				Ok(RcolBlock::Txtr(txtr_block))
 			},
+			TypeId::DataList => {
+				let datalist_node = DataListNode::read(cur)?;
+				Ok(RcolBlock::DataList(datalist_node))
+			},
 			_ => {
 				Ok(RcolBlock::Unknown(()))
 			}
@@ -126,6 +134,7 @@ impl RcolBlock {
 			RcolBlock::Cres(_) => u32::from(TypeId::Cres).write_le(writer)?,
 			RcolBlock::Txmt(_) => u32::from(TypeId::Txmt).write_le(writer)?,
 			RcolBlock::Txtr(_) => u32::from(TypeId::Txtr).write_le(writer)?,
+			RcolBlock::DataList(_) => u32::from(TypeId::DataList).write_le(writer)?,
 			RcolBlock::Unknown(block_id) => block_id.write_le(writer)?
 		}
 		Ok(())
@@ -139,6 +148,7 @@ impl RcolBlock {
 			RcolBlock::Cres(cres_block) => cres_block.write(writer)?,
 			RcolBlock::Txmt(txmt_block) => txmt_block.write(writer)?,
 			RcolBlock::Txtr(txtr_block) => txtr_block.write(writer)?,
+			RcolBlock::DataList(datalist_node) => datalist_node.write(writer)?,
 			RcolBlock::Unknown(_block_id) => {}
 		}
 		Ok(())

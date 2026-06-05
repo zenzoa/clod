@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::io::{ Cursor, Read, Write };
 
-use refpack::{ CompressionOptions, easy_compress, easy_decompress, format };
+use refpack::{ easy_decompress, format };
 
 use crate::dbpf::{ Identifier, TypeId };
 use crate::dbpf::index_entry::IndexEntry;
@@ -14,13 +14,17 @@ use crate::dbpf::resource_types::cres::Cres;
 use crate::dbpf::resource_types::mmat::Mmat;
 use crate::dbpf::resource_types::txmt::Txmt;
 use crate::dbpf::resource_types::txtr::Txtr;
+use crate::dbpf::resource_types::lifo::Lifo;
 
 use crate::dbpf::resource_types::gzps::Gzps;
+use crate::dbpf::resource_types::xtol::Xtol;
+
 use crate::dbpf::resource_types::idr::Idr;
 use crate::dbpf::resource_types::binx::Binx;
 use crate::dbpf::resource_types::text_list::TextList;
 
-use crate::dbpf::resource_types::xtol::Xtol;
+use crate::dbpf::resource_types::objd::Objd;
+use crate::dbpf::resource_types::ctss::Ctss;
 
 #[derive(Clone)]
 pub enum DecodedResource {
@@ -31,16 +35,19 @@ pub enum DecodedResource {
 	Mmat(Mmat),
 	Txmt(Txmt),
 	Txtr(Txtr),
+	Lifo(Lifo),
 	Gzps(Gzps),
 	Idr(Idr),
 	Binx(Binx),
 	Xtol(Xtol),
+	Objd(Objd),
+	Ctss(Ctss),
 	TextList(TextList),
 	Other(Resource)
 }
 
 impl DecodedResource {
-	pub fn new(resource: &Resource, title: &str) -> Result<Self, Box<dyn Error>> {
+	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		match resource.id.type_id {
 			TypeId::Gmdc => Ok(DecodedResource::Gmdc(Gmdc::new(resource)?)),
 			TypeId::Gmnd => Ok(DecodedResource::Gmnd(Gmnd::new(resource)?)),
@@ -49,10 +56,13 @@ impl DecodedResource {
 			TypeId::Mmat => Ok(DecodedResource::Mmat(Mmat::new(resource)?)),
 			TypeId::Txmt => Ok(DecodedResource::Txmt(Txmt::new(resource)?)),
 			TypeId::Txtr => Ok(DecodedResource::Txtr(Txtr::new(resource)?)),
-			TypeId::Gzps => Ok(DecodedResource::Gzps(Gzps::new(resource, title)?)),
+			TypeId::Lifo => Ok(DecodedResource::Lifo(Lifo::new(resource)?)),
+			TypeId::Gzps => Ok(DecodedResource::Gzps(Gzps::new(resource)?)),
 			TypeId::Idr => Ok(DecodedResource::Idr(Idr::new(resource)?)),
 			TypeId::Binx => Ok(DecodedResource::Binx(Binx::new(resource)?)),
 			TypeId::Xtol => Ok(DecodedResource::Xtol(Xtol::new(resource)?)),
+			TypeId::Objd => Ok(DecodedResource::Objd(Objd::new(resource)?)),
+			TypeId::Ctss => Ok(DecodedResource::Ctss(Ctss::new(resource)?)),
 			TypeId::TextList => Ok(DecodedResource::TextList(TextList::new(resource)?)),
 			_ => Ok(DecodedResource::Other(resource.clone()))
 		}
@@ -67,10 +77,13 @@ impl DecodedResource {
 			Self::Mmat(mmat) => { mmat.to_bytes() }
 			Self::Txmt(txmt) => { txmt.to_bytes() }
 			Self::Txtr(txtr) => { txtr.to_bytes() }
+			Self::Lifo(lifo) => { lifo.to_bytes() }
 			Self::Gzps(gzps) => { gzps.to_bytes() }
 			Self::Idr(idr) => { idr.to_bytes() }
 			Self::Binx(binx) => { binx.to_bytes() }
 			Self::Xtol(xtol) => { xtol.to_bytes() }
+			Self::Objd(objd) => { objd.to_bytes() }
+			Self::Ctss(ctss) => { ctss.to_bytes() }
 			Self::TextList(text_list) => { text_list.to_bytes() }
 			Self::Other(resource) => { Ok(resource.data.clone()) }
 		}
@@ -85,10 +98,13 @@ impl DecodedResource {
 			Self::Mmat(mmat) => { mmat.id.clone() }
 			Self::Txmt(txmt) => { txmt.id.clone() }
 			Self::Txtr(txtr) => { txtr.id.clone() }
+			Self::Lifo(lifo) => { lifo.id.clone() }
 			Self::Gzps(gzps) => { gzps.id.clone() }
 			Self::Idr(idr) => { idr.id.clone() }
 			Self::Binx(binx) => { binx.id.clone() }
 			Self::Xtol(xtol) => { xtol.id.clone() }
+			Self::Objd(objd) => { objd.id.clone() }
+			Self::Ctss(ctss) => { ctss.id.clone() }
 			Self::TextList(text_list) => { text_list.id.clone() }
 			Self::Other(resource) => { resource.id.clone() }
 		}
@@ -121,30 +137,15 @@ impl Resource {
 		cur.set_position(index_entry.resource_offset as u64);
 		let mut raw_data = vec![0u8; index_entry.resource_size as usize];
 		cur.read_exact(&mut raw_data)?;
-
-		let data = easy_decompress::<format::Maxis>(&raw_data)
-			.or_else(|_| easy_decompress::<format::SimEA>(&raw_data))
-			// .or_else(|_| easy_decompress::<format::Reference>(&raw_data))
-			.unwrap_or(raw_data.clone());
-
+		let data = easy_decompress::<format::Maxis>(&raw_data).unwrap_or(raw_data.clone());
 		Ok(Self {
 			id: index_entry.id.clone(),
 			data
 		})
 	}
 
-	pub fn decode(&self, title: &str) -> Result<DecodedResource, Box<dyn Error>> {
-		DecodedResource::new(self, title)
-	}
-
-	pub fn compress(&mut self) -> Result<bool, Box<dyn Error>> {
-		let new_data = easy_compress::<format::Maxis>(&self.data, CompressionOptions::Optimal)?;
-		if new_data.len() < self.data.len() {
-			self.data = new_data;
-			Ok(true)
-		} else {
-			Ok(false)
-		}
+	pub fn decode(&self) -> Result<DecodedResource, Box<dyn Error>> {
+		DecodedResource::new(self)
 	}
 
 	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {

@@ -34,6 +34,16 @@ impl Cres {
 	pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
 		Ok(self.data.clone())
 	}
+
+	pub fn get_shpe_refs(&self) -> Vec<Identifier> {
+		match Rcol::read(&self.data) {
+			Ok(rcol) => rcol.links.iter()
+				.filter(|l| l.type_id == TypeId::Shpe)
+				.cloned()
+				.collect(),
+			Err(_) => Vec::new()
+		}
+	}
 }
 
 #[derive(Clone)]

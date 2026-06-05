@@ -11,7 +11,7 @@ use crate::dbpf::resource::Resource;
 pub struct TextList {
 	pub id: Identifier,
 	pub key_name: [u8;64],
-	pub strings: Vec<StringItem>
+	pub strings: Vec<TextItem>
 }
 
 impl TextList {
@@ -30,7 +30,7 @@ impl TextList {
 
 		let mut strings = Vec::new();
 		for _ in 0..num_strings {
-			let string_item = StringItem::new(&mut cur)?;
+			let string_item = TextItem::new(&mut cur)?;
 			strings.push(string_item);
 		}
 
@@ -62,7 +62,7 @@ impl TextList {
 			id,
 			key_name: [0; 64],
 			strings: vec![
-				StringItem {
+				TextItem {
 					language_code: 0x01,
 					title: "".to_string(),
 					description: "".to_string()
@@ -71,17 +71,17 @@ impl TextList {
 		}
 	}
 
-	pub fn from_string(title: &str, guid: u32) -> Self {
+	pub fn from_string(title: &str, group_id: u32) -> Self {
 		Self {
 			id: Identifier {
 				type_id: TypeId::TextList,
-				group_id: guid,
+				group_id,
 				resource_id: 0,
 				instance_id: 1,
 			},
 			key_name: [0; 64],
 			strings: vec![
-				StringItem {
+				TextItem {
 					language_code: 0x01,
 					title: title.to_string(),
 					description: "".to_string()
@@ -89,16 +89,20 @@ impl TextList {
 			]
 		}
 	}
+
+	pub fn get_items_by_language(&self, language_code: u8) -> Vec<TextItem> {
+		self.strings.iter().filter(|s| s.language_code == language_code).cloned().collect()
+	}
 }
 
 #[derive(Clone)]
-pub struct StringItem {
+pub struct TextItem {
 	pub language_code: u8,
 	pub title: String,
 	pub description: String
 }
 
-impl StringItem {
+impl TextItem {
 	pub fn new(cur: &mut Cursor<&[u8]>) -> Result<Self, Box<dyn Error>> {
 		Ok(Self {
 			language_code: u8::read(cur)?,

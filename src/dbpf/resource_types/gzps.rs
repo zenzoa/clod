@@ -3,15 +3,13 @@ use std::io::Cursor;
 
 use regex::Regex;
 
-use crate::dbpf::{ Identifier, PascalString, TypeId };
+use crate::dbpf::{ Identifier, PascalString };
 use crate::dbpf::resource::Resource;
-use crate::dbpf::resource_types::cpf::{ Cpf, CpfType, PropertyValue };
+use crate::dbpf::resource_types::cpf::{ Cpf, PropertyValue };
 
 #[derive(Clone, Default)]
 pub struct Gzps {
 	pub id: Identifier,
-	pub cpf_type: CpfType,
-	pub cpf_version: Option<u16>,
 
 	pub version: Option<u32>,
 	pub product: Option<u32>,
@@ -21,12 +19,12 @@ pub struct Gzps {
 	pub species: u32,
 	pub outfit: Vec<Part>,
 	pub parts: Vec<Part>,
-	pub flags: u32,
+	pub flags: Vec<OutfitFlag>,
 	pub name: PascalString,
 	pub creator: PascalString,
 	pub family: PascalString,
 	pub genetic: Option<f32>,
-	pub priority: Option<i32>,
+	pub priority: Option<u32>,
 	pub outfit_type: PascalString,
 	pub skintone: PascalString,
 	pub hairtone: HairTone,
@@ -34,21 +32,16 @@ pub struct Gzps {
 	pub shoe: Shoe,
 	pub fitness: u32,
 
-	pub resource: u32,
-	pub shape: u32,
-
-	pub overrides: Vec<Override>,
-
-	pub title: String
+	pub cres_index: u32,
+	pub shpe_index: u32,
+	pub subset_indexes: Vec<SubsetRef>
 }
 
 impl Gzps {
-	pub fn new(resource: &Resource, title: &str) -> Result<Self, Box<dyn Error>> {
+	pub fn new(resource: &Resource) -> Result<Self, Box<dyn Error>> {
 		let cpf = Cpf::read(&resource.data)?;
 		let mut gzps = Self {
 			id: resource.id.clone(),
-			cpf_type: cpf.cpf_type,
-			cpf_version: cpf.version,
 			..Self::default()
 		};
 
@@ -95,7 +88,7 @@ impl Gzps {
 		};
 
 		gzps.flags = match cpf.get_prop("flags") {
-			Some(PropertyValue::Uint(val)) => *val,
+			Some(PropertyValue::Uint(val)) => OutfitFlag::from_flag(*val),
 			_ => return Err("GZPS is missing \"flags\" property.".into())
 		};
 
@@ -120,7 +113,7 @@ impl Gzps {
 		};
 
 		gzps.priority = match cpf.get_prop("priority") {
-			Some(PropertyValue::Int(val)) => Some(*val),
+			Some(PropertyValue::Uint(val)) => Some(*val),
 			_ => None
 		};
 
@@ -154,14 +147,14 @@ impl Gzps {
 			_ => return Err("GZPS is missing \"fitness\" property.".into())
 		};
 
-		gzps.shape = match cpf.get_prop("shapekeyidx") {
-			Some(PropertyValue::Uint(val)) => *val,
-			_ => return Err("GZPS is missing \"shapekeyidx\" property.".into())
-		};
-
-		gzps.resource = match cpf.get_prop("resourcekeyidx") {
+		gzps.cres_index = match cpf.get_prop("resourcekeyidx") {
 			Some(PropertyValue::Uint(val)) => *val,
 			_ => return Err("GZPS is missing \"resourcekeyidx\" property.".into())
+		};
+
+		gzps.shpe_index = match cpf.get_prop("shapekeyidx") {
+			Some(PropertyValue::Uint(val)) => *val,
+			_ => return Err("GZPS is missing \"shapekeyidx\" property.".into())
 		};
 
 		let num_overrides = match cpf.get_prop("numoverrides") {
@@ -170,26 +163,24 @@ impl Gzps {
 		};
 
 		for i in 0..num_overrides {
-			let shape = match cpf.get_prop(&format!("override{i}shape")) {
+			let shpe_index = match cpf.get_prop(&format!("override{i}shape")) {
 				Some(PropertyValue::Uint(val)) => *val,
 				_ => return Err(format!("GZPS is missing \"override{i}shape\" property.").into())
 			};
-			let subset = match cpf.get_prop(&format!("override{i}subset")) {
+			let subset_name = match cpf.get_prop(&format!("override{i}subset")) {
 				Some(PropertyValue::String(val)) => val.clone(),
 				_ => return Err(format!("GZPS is missing \"override{i}subset\" property.").into())
 			};
-			let resource = match cpf.get_prop(&format!("override{i}resourcekeyidx")) {
+			let txmt_index = match cpf.get_prop(&format!("override{i}resourcekeyidx")) {
 				Some(PropertyValue::Uint(val)) => *val,
 				_ => return Err(format!("GZPS is missing \"override{i}resourcekeyidx\" property.").into())
 			};
-			gzps.overrides.push(Override {
-				shape,
-				subset,
-				resource
+			gzps.subset_indexes.push(SubsetRef {
+				shpe_index,
+				subset_name,
+				txmt_index
 			})
 		}
-
-		gzps.title = title.to_string();
 
 		Ok(gzps)
 	}
@@ -210,7 +201,7 @@ impl Gzps {
 		props.push(("species".to_string(), PropertyValue::Uint(self.species)));
 		props.push(("outfit".to_string(), PropertyValue::Uint(Part::to_flag(&self.outfit))));
 		props.push(("parts".to_string(), PropertyValue::Uint(Part::to_flag(&self.parts))));
-		props.push(("flags".to_string(), PropertyValue::Uint(self.flags)));
+		props.push(("flags".to_string(), PropertyValue::Uint(OutfitFlag::to_flag(&self.flags))));
 		props.push(("name".to_string(), PropertyValue::String(self.name.clone())));
 		props.push(("creator".to_string(), PropertyValue::String(self.creator.clone())));
 		props.push(("family".to_string(), PropertyValue::String(self.family.clone())));
@@ -218,7 +209,7 @@ impl Gzps {
 			props.push(("genetic".to_string(), PropertyValue::Float(genetic)));
 		}
 		if let Some(priority) = self.priority {
-			props.push(("priority".to_string(), PropertyValue::Int(priority)));
+			props.push(("priority".to_string(), PropertyValue::Uint(priority)));
 		}
 		props.push(("type".to_string(), PropertyValue::String(self.outfit_type.clone())));
 		props.push(("skintone".to_string(), PropertyValue::String(self.skintone.clone())));
@@ -226,122 +217,43 @@ impl Gzps {
 		props.push(("category".to_string(), PropertyValue::Uint(Category::to_flag(&self.categories))));
 		props.push(("shoe".to_string(), PropertyValue::Uint(self.shoe as u32)));
 		props.push(("fitness".to_string(), PropertyValue::Uint(self.fitness)));
-		props.push(("resourcekeyidx".to_string(), PropertyValue::Uint(self.resource)));
-		props.push(("shapekeyidx".to_string(), PropertyValue::Uint(self.shape)));
+		props.push(("resourcekeyidx".to_string(), PropertyValue::Uint(self.cres_index)));
+		props.push(("shapekeyidx".to_string(), PropertyValue::Uint(self.shpe_index)));
 
-		props.push(("numoverrides".to_string(), PropertyValue::Uint(self.overrides.len() as u32)));
-		for (i, outfit_override) in self.overrides.iter().enumerate() {
-			props.push((format!("override{i}shape"), PropertyValue::Uint(outfit_override.shape)));
-			props.push((format!("override{i}subset"), PropertyValue::String(outfit_override.subset.clone())));
-			props.push((format!("override{i}resourcekeyidx"), PropertyValue::Uint(outfit_override.resource)));
+		props.push(("numoverrides".to_string(), PropertyValue::Uint(self.subset_indexes.len() as u32)));
+		for (i, outfit_override) in self.subset_indexes.iter().enumerate() {
+			props.push((format!("override{i}shape"), PropertyValue::Uint(outfit_override.shpe_index)));
+			props.push((format!("override{i}subset"), PropertyValue::String(outfit_override.subset_name.clone())));
+			props.push((format!("override{i}resourcekeyidx"), PropertyValue::Uint(outfit_override.txmt_index)));
 		}
 
-		let cpf = Cpf {
-			cpf_type: self.cpf_type,
-			version: self.cpf_version,
-			props
-		};
-		cpf.write(&mut cur)?;
+		Cpf::write_props(&props, &mut cur)?;
 
 		Ok(cur.into_inner())
 	}
 
-	pub fn set_property(&mut self, property: &str, value: &str) -> Result<(), Box<dyn Error>> {
-		match property {
-			"version" => self.version = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
-			"product" => self.product = if value.to_lowercase() == "none" { None } else { Some(value.parse::<u32>()?)},
-			"age" => self.ages = Age::from_flag(value.parse::<u32>()?),
-			"gender" => self.genders = Gender::from_flag(value.parse::<u32>()?),
-			"species" => self.species = value.parse::<u32>()?,
-			"outfit" => self.outfit = Part::from_flag(value.parse::<u32>()?),
-			"parts" => self.parts = Part::from_flag(value.parse::<u32>()?),
-			"flags" => self.flags = value.parse::<u32>()?,
-			"name" => self.name = PascalString::new(value),
-			"creator" => self.creator = PascalString::new(value),
-			"family" => self.family = PascalString::new(value),
-			"genetic" => self.genetic = if value.to_lowercase() == "none" { None } else { Some(value.parse::<f32>()?)},
-			"priority" => self.priority = if value.to_lowercase() == "none" { None } else { Some(value.parse::<i32>()?)},
-			"outfit_type" => self.outfit_type = PascalString::new(value),
-			"skintone" => self.skintone = PascalString::new(value),
-			"hairtone" => self.hairtone = HairTone::from_string(value),
-			"category" => self.categories = Category::from_flag(value.parse::<u32>()?),
-			"shoe" => self.shoe = Shoe::from_flag(value.parse::<u32>()?),
-			"fitness" => self.fitness = value.parse::<u32>()?,
-			_ => { return Err(format!("No property named '{property}' found in GZPS").into()); }
-		}
-		Ok(())
+	pub fn outfit_name(&self) -> String {
+		format!("{}_{:08X}-{:08X}-{:08X}", self.name, self.id.group_id, self.id.resource_id, self.id.instance_id)
 	}
 
-	pub fn age_gender_string(&self) -> String {
-		let age = Age::stringify(&self.ages, true, true);
-		let gender = Gender::stringify(&self.genders);
-		format!("{age}{gender}").to_uppercase()
-	}
-
-	pub fn generate_key(&self) -> String {
-		let age = Age::stringify(&self.ages, false, true);
+	pub fn outfit_group_name(&self) -> String {
+		let age = Age::stringify(&self.ages);
 		let gender = Gender::stringify(&self.genders);
 		let part = Part::stringify(&self.parts);
+
 		let full_name = self.name.to_string().to_lowercase().trim().to_string();
+		let mut base_name = full_name.clone();
 
-		let mut name_without_prefix = full_name.clone();
 		let re = Regex::new(r"^(?:casie_)?(?:contest_)?[bpctyaeu][mfu](?:body)?(?:bottom)?(?:top)?([a-z,0-9]+)_?").unwrap();
-		for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
-			name_without_prefix = inner.to_string();
+		for (_, [inner]) in re.captures_iter(&full_name).map(|cap| cap.extract()) {
+			base_name = inner.to_string();
 		}
 
-		let mut name_without_ep = name_without_prefix.clone();
-		let re2 = Regex::new(r"([a-z,0-9]+)ep\d$").unwrap();
-		for (_, [inner]) in re2.captures_iter(&name_without_prefix).map(|c| c.extract()) {
-			name_without_ep = inner.to_string();
-		}
-
-		format!("{part}_{name_without_ep}_{age}{gender}")
-	}
-
-	pub fn hair_name(&self) -> String {
-		let age = Age::stringify(&self.ages, false, false);
-		let hairtone = if self.hairtone == HairTone::Other { "".to_string() } else { format!("_{}",self.hairtone.stringify()) };
-		let hidden = if self.flags & 1 > 0 { "_HIDDEN" } else { "" };
-		format!("{}{}{}{}", age, self.hair_group_name(), hairtone, hidden)
-	}
-
-	pub fn hair_group_name(&self) -> String {
-		let full_name = self.name.to_string().to_lowercase().trim().replace(" ", "");
-		let mut group_name = full_name.clone();
-		let re = Regex::new(r"^(?:casie_)?y?[bpctyaeu][mfu](?:hair)(.+)").unwrap();
-		for (_, [inner]) in re.captures_iter(&full_name).map(|c| c.extract()) {
-			group_name = inner.to_string();
-		}
-		let num_clones = group_name.matches("_clone").count();
-		group_name = group_name.replace("_clone", "");
-		let hairtone = format!("_{}", self.hairtone.stringify());
-		if group_name.contains("santacap") ||
-			group_name.contains("mrsclaus") {
-				group_name = group_name.replacen(&self.hairtone.stringify(), "", 1);
-		} else if group_name.contains("hatballcapup") ||
-			group_name.contains("hatbaker_") ||
-			group_name.contains("hatfronds") ||
-			group_name.contains("hattourguide") ||
-			group_name.contains("hatwitch") ||
-			group_name.contains("hatwitch") ||
-			group_name.contains("masksuperninja") ||
-			group_name.contains("ponypuff") ||
-			group_name.contains("hatbellhop") ||
-			group_name.contains("hatfedoraband") ||
-			group_name.contains("hatpanama") {
-				group_name = group_name.replacen(&hairtone, "", 1);
-		} else {
-			group_name = group_name.rsplitn(2, &hairtone).last().unwrap().to_string();
-		}
-		group_name.push_str(&"_clone".repeat(num_clones));
-		group_name.insert_str(0, "hair_");
-		group_name.insert_str(0, &Gender::stringify(&self.genders));
-		group_name
+		format!("{age}{gender}{part}_{base_name}")
 	}
 
 	pub fn max_resource_key(&self) -> u32 {
-		let resource_keys = self.overrides.iter().map(|o| o.resource);
+		let resource_keys = self.subset_indexes.iter().map(|o| o.txmt_index);
 		resource_keys.max().unwrap_or(0)
 	}
 
@@ -353,55 +265,45 @@ impl Gzps {
 				self.genders = vec![Gender::Male, Gender::Female];
 		}
 	}
-}
 
-pub struct OutfitSpec {
-	pub guid: u32,
-	pub name: String,
-	pub ages: Vec<Age>,
-	pub genders: Vec<Gender>,
-	pub parts: Vec<Part>,
-	pub flags: u32,
-	pub categories: Vec<Category>,
-	pub shoe: Shoe,
-	pub subsets: Vec<String>
-}
+	pub fn update_with(&mut self, make_unisex: bool, category_overrides: &Option<Vec<Category>>, flag_overrides: &Option<Vec<OutfitFlag>>, txmt_ids: &[(String, Identifier)]) {
+		self.creator = PascalString::new("00000000-0000-0000-0000-000000000000");
 
-impl OutfitSpec {
-	pub fn to_gzps(&self) -> Gzps {
-		Gzps {
-			id: Identifier::new(u32::from(TypeId::Gzps), self.guid, 0, 1),
-			cpf_type: CpfType::Normal,
-			cpf_version: Some(2),
-			version: Some(6),
-			product: Some(0),
-			ages: self.ages.clone(),
-			genders: self.genders.clone(),
-			species: 1,
-			outfit: self.parts.clone(),
-			parts: self.parts.clone(),
-			flags: self.flags,
-			name: PascalString::new(&self.name),
-			creator: PascalString::new("00000000-0000-0000-0000-000000000000"),
-			family: PascalString::new("00000000-0000-0000-0000-000000000000"),
-			genetic: None,
-			priority: None,
-			outfit_type: PascalString::new("skin"),
-			skintone: PascalString::new("00000000-0000-0000-0000-000000000000"),
-			hairtone: HairTone::None,
-			categories: self.categories.clone(),
-			shoe: self.shoe,
-			fitness: 0,
-			resource: 0,
-			shape: 1,
-			overrides: self.subsets.iter().enumerate().map(|(i, subset)|
-				Override {
-					shape: 0,
-					subset: PascalString::new(subset),
-					resource: i as u32 + 2
-				}).collect::<Vec<Override>>(),
-			title: self.name.clone()
+		// Set version/product to remove pack icon or custom star and sort with the rest
+		self.version = Some(2);
+		self.product = Some(1);
+
+		if make_unisex {
+			self.make_unisex();
 		}
+
+		if let Some(categories) = category_overrides {
+			self.categories = categories.clone().into_iter()
+				.filter(|c| *c != Category::Pregnant || self.ages.contains(&Age::Adult) || self.ages.contains(&Age::YoungAdult) || self.parts.contains(&Part::Hair))
+				.collect();
+		}
+
+		if let Some(flags) = flag_overrides {
+			let is_default = self.flags.contains(&OutfitFlag::Default);
+			self.flags = flags.clone();
+			if is_default {
+				self.flags.push(OutfitFlag::Default);
+			}
+		}
+
+		self.cres_index = 0;
+		self.shpe_index = 1;
+		self.subset_indexes = txmt_ids.iter().enumerate()
+			.map(|(j, (subset, _))| SubsetRef {
+				shpe_index: 0,
+				subset_name: PascalString::new(subset),
+				txmt_index: 2 + j as u32
+			})
+			.collect();
+	}
+
+	pub fn age_gender_string(&self) -> String {
+		format!("{}{}", Age::stringify(&self.ages), Gender::stringify(&self.genders))
 	}
 }
 
@@ -409,13 +311,13 @@ impl OutfitSpec {
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Category {
 	Everyday = 7,
-	Swimwear = 8,
-	PJs = 16,
+	Swim = 8,
+	Pajamas = 16,
 	Formal = 32,
-	Undies = 64,
+	Underwear = 64,
 	Skin = 128,
-	Maternity = 256,
-	Athletic = 512,
+	Pregnant = 256,
+	Active = 512,
 	TryOn = 1024,
 	Overlay = 2048,
 	Outerwear = 4096
@@ -425,13 +327,13 @@ impl Category {
 	pub fn from_flag(flag: u32) -> Vec<Self> {
 		let mut categories = Vec::new();
 		if flag & Self::Everyday as u32 > 0 { categories.push(Self::Everyday) }
-		if flag & Self::Swimwear as u32 > 0 { categories.push(Self::Swimwear) }
-		if flag & Self::PJs as u32 > 0 { categories.push(Self::PJs) }
+		if flag & Self::Swim as u32 > 0 { categories.push(Self::Swim) }
+		if flag & Self::Pajamas as u32 > 0 { categories.push(Self::Pajamas) }
 		if flag & Self::Formal as u32 > 0 { categories.push(Self::Formal) }
-		if flag & Self::Undies as u32 > 0 { categories.push(Self::Undies) }
+		if flag & Self::Underwear as u32 > 0 { categories.push(Self::Underwear) }
 		if flag & Self::Skin as u32 > 0 { categories.push(Self::Skin) }
-		if flag & Self::Maternity as u32 > 0 { categories.push(Self::Maternity) }
-		if flag & Self::Athletic as u32 > 0 { categories.push(Self::Athletic) }
+		if flag & Self::Pregnant as u32 > 0 { categories.push(Self::Pregnant) }
+		if flag & Self::Active as u32 > 0 { categories.push(Self::Active) }
 		if flag & Self::TryOn as u32 > 0 { categories.push(Self::TryOn) }
 		if flag & Self::Overlay as u32 > 0 { categories.push(Self::Overlay) }
 		if flag & Self::Outerwear as u32 > 0 { categories.push(Self::Outerwear) }
@@ -439,73 +341,25 @@ impl Category {
 	}
 
 	pub fn to_flag(categories: &[Self]) -> u32 {
-		let mut flag = 0;
-		for category in categories {
-			flag += *category as u32;
-		}
-		flag
+		categories.iter().map(|c| *c as u32).sum()
 	}
 
-	pub fn toggle_category(categories: &mut Vec<Self>, category: Self, value: bool) {
-		if value {
-			Self::add_category(categories, category);
-		} else {
-			Self::remove_category(categories, category);
-		}
-	}
-
-	pub fn add_category(categories: &mut Vec<Self>, category: Self) {
-		if !categories.contains(&category) {
-			categories.push(category);
+	pub fn from_string(s: &str) -> Option<Self> {
+		match s {
+			"e" | "everyday" => Some(Self::Everyday),
+			"f" | "formal" => Some(Self::Formal),
+			"u" | "underwear" => Some(Self::Underwear),
+			"p" | "pajamas" => Some(Self::Pajamas),
+			"s" | "swim" => Some(Self::Swim),
+			"a" | "active" => Some(Self::Active),
+			"o" | "outerwear" => Some(Self::Outerwear),
+			"P" | "pregnant" => Some(Self::Pregnant),
+			_ => None
 		}
 	}
 
-	pub fn remove_category(categories: &mut Vec<Self>, category: Self) {
-		if let Some(i) = categories.iter().position(|x| *x == category) {
-			categories.remove(i);
-		}
-	}
-
-	pub fn stringify(categories: &[Self]) -> String {
-		let mut category_string = String::new();
-		if categories.contains(&Self::Everyday) { category_string.push('e'); }
-		if categories.contains(&Self::Swimwear) { category_string.push('s'); }
-		if categories.contains(&Self::PJs) { category_string.push('p'); }
-		if categories.contains(&Self::Formal) { category_string.push('f'); }
-		if categories.contains(&Self::Undies) { category_string.push('u'); }
-		if categories.contains(&Self::Maternity) { category_string.push('m'); }
-		if categories.contains(&Self::Athletic) { category_string.push('a'); }
-		if categories.contains(&Self::Outerwear) { category_string.push('o'); }
-		category_string
-	}
-
-	pub fn from_string(s: &str) -> Vec<Self> {
-		let mut categories = Vec::new();
-		if s.contains("everyday") || s.contains("casual") {
-			categories.push(Self::Everyday);
-		}
-		if s.contains("swim") {
-			categories.push(Self::Swimwear);
-		}
-		if s.contains("sleep") || s.contains("pajama") || s.contains("pjs") {
-			categories.push(Self::PJs);
-		}
-		if s.contains("formal") || s.contains("fancy") {
-			categories.push(Self::Formal);
-		}
-		if s.contains("underwear") || s.contains("undies") {
-			categories.push(Self::Undies);
-		}
-		if s.contains("maternity") || s.contains("pregnant") {
-			categories.push(Self::Maternity);
-		}
-		if s.contains("active") || s.contains("athletic") || s.contains("gym") {
-			categories.push(Self::Athletic);
-		}
-		if s.contains("outerwear") {
-			categories.push(Self::Outerwear);
-		}
-		categories
+	pub fn all() -> Vec<Self> {
+		vec![Self::Everyday, Self::Swim, Self::Pajamas, Self::Formal, Self::Underwear, Self::Pregnant, Self::Active, Self::Outerwear]
 	}
 }
 
@@ -535,11 +389,7 @@ impl Age {
 	}
 
 	pub fn to_flag(ages: &[Self]) -> u32 {
-		let mut flag = 0;
-		for age in ages {
-			flag += *age as u32;
-		}
-		flag
+		ages.iter().map(|a| *a as u32).sum()
 	}
 
 	pub fn are_compatible(a: &[Self], b: &[Self]) -> bool {
@@ -549,54 +399,27 @@ impl Age {
 			(a.contains(&Self::Elder) && b.contains(&Self::Elder))
 	}
 
-	pub fn toggle_age(ages: &mut Vec<Self>, age: Self, value: bool) {
-		if value {
-			Self::add_age(ages, age);
-		} else {
-			Self::remove_age(ages, age);
+	pub fn from_string(s: &str) -> Option<Self> {
+		match s {
+			"p" | "toddler" => Some(Self::Toddler),
+			"c" | "child" => Some(Self::Child),
+			"t" | "teen" => Some(Self::Teen),
+			"y" | "youngadult" => Some(Self::YoungAdult),
+			"a" | "adult" => Some(Self::Adult),
+			"e" | "elder" => Some(Self::Elder),
+			_ => None
 		}
 	}
 
-	pub fn add_age(ages: &mut Vec<Self>, age: Self) {
-		if !ages.contains(&age) {
-			ages.push(age);
-		}
-	}
-
-	pub fn remove_age(ages: &mut Vec<Self>, age: Self) {
-		if let Some(i) = ages.iter().position(|x| *x == age) {
-			ages.remove(i);
-		}
-	}
-
-	pub fn from_string(s: &str) -> Vec<Self> {
-		match s.to_lowercase().as_str() {
-			"b" => vec![Self::Baby],
-			"p" => vec![Self::Toddler],
-			"c" => vec![Self::Child],
-			"t" => vec![Self::Teen],
-			"a" | "y" => vec![Self::Adult, Self::YoungAdult],
-			"e" => vec![Self::Elder],
-			_ => vec![]
-		}
-	}
-
-	pub fn stringify(ages: &[Self], combine_adults: bool, simple: bool) -> String {
+	pub fn stringify(ages: &[Self]) -> String {
 		let mut age_string = String::new();
 		if ages.contains(&Self::Baby) { age_string.push('b'); }
 		if ages.contains(&Self::Toddler) { age_string.push('p'); }
 		if ages.contains(&Self::Child) { age_string.push('c'); }
 		if ages.contains(&Self::Teen) { age_string.push('t'); }
-		if combine_adults {
-			if ages.contains(&Self::Adult) || ages.contains(&Age::YoungAdult) { age_string.push('a'); }
-		} else if simple {
-			if ages.contains(&Self::Adult) { age_string.push('a'); }
-			else if ages.contains(&Self::YoungAdult) { age_string.push('y'); }
-		} else {
-			if ages.contains(&Self::Adult) { age_string.push('a'); }
-			if ages.contains(&Self::YoungAdult) { age_string.push('y'); }
-		}
-		if ages.contains(&Self::Elder) && (!ages.contains(&Self::Adult) || !simple) { age_string.push('e'); }
+		if ages.contains(&Self::YoungAdult) { age_string.push('y'); }
+		if ages.contains(&Self::Adult) { age_string.push('a'); }
+		if ages.contains(&Self::Elder) { age_string.push('e'); }
 		age_string
 	}
 }
@@ -618,11 +441,7 @@ impl Gender {
 	}
 
 	pub fn to_flag(genders: &[Self]) -> u32 {
-		let mut flag = 0;
-		for gender in genders {
-			flag += *gender as u32;
-		}
-		flag
+		genders.iter().map(|g| *g as u32).sum()
 	}
 
 	pub fn are_compatible(genders1: &[Self], genders2: &[Self], ages: &[Age]) -> bool {
@@ -631,40 +450,25 @@ impl Gender {
 			(genders1.len() >= 2 && !genders2.is_empty())
 	}
 
-	pub fn toggle_gender(genders: &mut Vec<Self>, gender: Self, value: bool) {
-		if value {
-			Self::add_gender(genders, gender);
-		} else {
-			Self::remove_gender(genders, gender);
-		}
-	}
-
-	pub fn add_gender(genders: &mut Vec<Self>, gender: Self) {
-		if !genders.contains(&gender) {
-			genders.push(gender);
-		}
-	}
-
-	pub fn remove_gender(genders: &mut Vec<Self>, gender: Self) {
-		if let Some(i) = genders.iter().position(|x| *x == gender) {
-			genders.remove(i);
-		}
-	}
-
 	pub fn from_string(s: &str) -> Vec<Self> {
-		match s.to_lowercase().as_str() {
-			"m" => vec![Self::Male],
-			"f" => vec![Self::Female],
-			_ => vec![Self::Male, Self::Female]
+		match s {
+			"f" | "female" => vec![Self::Female],
+			"m" | "male" => vec![Self::Male],
+			"u" | "unisex" => vec![Self::Female, Self::Male],
+			_ => vec![]
 		}
 	}
 
 	pub fn stringify(genders: &[Self]) -> String {
-		(if genders.len() > 1 { "u" }
-		else if genders.contains(&Self::Male) { "m" }
-		else if genders.contains(&Self::Female) { "f" }
-		else { "" })
-			.to_string()
+		if genders.len() > 1 {
+			"u".to_string()
+		} else if genders.contains(&Self::Male) {
+			"m".to_string()
+		} else if genders.contains(&Self::Female) {
+			"f".to_string()
+		} else {
+			"".to_string()
+		}
 	}
 }
 
@@ -697,14 +501,14 @@ impl Shoe {
 	}
 
 	pub fn from_string(s: &str) -> Self {
-		match s.to_lowercase().as_str() {
-			"bare" | "barefoot" => Self::Barefoot,
-			"boot" | "boots" => Self::Boots,
-			"heel" | "heels" => Self::Heels,
-			"normal" => Self::Normal,
-			"sandal" | "sandals" => Self::Sandals,
-			"pj" | "pjs" | "pajama" | "pajamas" => Self::Pajamas,
-			"armor" | "armored" => Self::Armored,
+		match s {
+			"b" | "barefoot" => Self::Barefoot,
+			"B" | "boots" => Self::Boots,
+			"h" | "heels" => Self::Heels,
+			"d" | "default" | "normal" => Self::Normal,
+			"s" | "sandals" => Self::Sandals,
+			"p" | "pajamas" => Self::Pajamas,
+			"a" | "armor" => Self::Armored,
 			_ => Self::None
 		}
 	}
@@ -752,18 +556,14 @@ impl Part {
 	}
 
 	pub fn to_flag(parts: &[Self]) -> u32 {
-		let mut flag = 0;
-		for part in parts {
-			flag += *part as u32;
-		}
-		flag
+		parts.iter().map(|p| *p as u32).sum()
 	}
 
 	pub fn from_string(s: &str) -> Vec<Self> {
-		match s.to_lowercase().as_str() {
-			"top" => vec![Self::Top],
-			"bottom" | "bot" => vec![Self::Bottom],
-			"body" => vec![Self::Body],
+		match s {
+			"f" | "fullbody" | "body" => vec![Self::Body],
+			"t" | "top" => vec![Self::Top],
+			"b" | "bottom" => vec![Self::Bottom],
 			_ => vec![]
 		}
 	}
@@ -777,6 +577,45 @@ impl Part {
 		else if parts.contains(&Self::Accessory) { "accessory" }
 		else { "" })
 			.to_string()
+	}
+}
+
+#[repr(u32)]
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum OutfitFlag {
+	Hidden = 1,
+	Hat = 2,
+	Default = 4,
+	NoTownies = 8,
+	Unused = 16,
+	NoEmployees = 32
+}
+
+impl OutfitFlag {
+	pub fn from_flag(flag: u32) -> Vec<OutfitFlag> {
+		let mut outfit_flags = Vec::new();
+		if flag & Self::Hidden as u32 > 0 { outfit_flags.push(Self::Hidden) }
+		if flag & Self::Hat as u32 > 0 { outfit_flags.push(Self::Hat) }
+		if flag & Self::Default as u32 > 0 { outfit_flags.push(Self::Default) }
+		if flag & Self::NoTownies as u32 > 0 { outfit_flags.push(Self::NoTownies) }
+		if flag & Self::Unused as u32 > 0 { outfit_flags.push(Self::Unused) }
+		if flag & Self::NoEmployees as u32 > 0 { outfit_flags.push(Self::NoEmployees) }
+		outfit_flags
+	}
+
+	pub fn to_flag(outfit_flags: &[Self]) -> u32 {
+		outfit_flags.iter().map(|f| *f as u32).sum()
+	}
+
+	pub fn from_string(s: &str) -> Option<Self> {
+		match s {
+			"h" | "hidden" => Some(Self::Hidden),
+			"H" | "hat" => Some(Self::Hat),
+			"d" | "default" => Some(Self::Default),
+			"t" | "notownies" => Some(Self::NoTownies),
+			"w" | "noworkers" => Some(Self::NoEmployees),
+			_ => None
+		}
 	}
 }
 
@@ -820,23 +659,11 @@ impl HairTone {
 			_ => Self::Other,
 		}
 	}
-
-	pub fn stringify(&self) -> String {
-		(match self {
-			Self::None => "none",
-			Self::Black => "black",
-			Self::Brown => "brown",
-			Self::Blond => "blond",
-			Self::Red => "red",
-			Self::Grey => "grey",
-			Self::Other => "other"
-		}).to_string()
-	}
 }
 
 #[derive(Clone, Default)]
-pub struct Override {
-	pub shape: u32,
-	pub subset: PascalString,
-	pub resource: u32,
+pub struct SubsetRef {
+	pub shpe_index: u32,
+	pub subset_name: PascalString,
+	pub txmt_index: u32,
 }

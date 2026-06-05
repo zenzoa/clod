@@ -10,7 +10,6 @@ use binrw::{ BinRead, BinWrite };
 use crate::dbpf::header::Header;
 use crate::dbpf::index_entry::IndexEntry;
 use crate::dbpf::resource::{ Resource, DecodedResource };
-use crate::dbpf::resource_types::dir::{ Dir, DirItem };
 
 pub mod header;
 pub mod index_entry;
@@ -20,80 +19,73 @@ pub mod resource_types;
 #[derive(Clone)]
 pub struct Dbpf {
 	pub header: Header,
-	pub resources: Vec<DecodedResource>,
-	pub is_compressed: bool
+	pub resources: Vec<DecodedResource>
 }
 
 impl Dbpf {
 	pub fn new(resources: Vec<DecodedResource>) -> Result<Self, Box<dyn Error>> {
 		Ok(Self {
 			header: Header::default(),
-			resources,
-			is_compressed: false
+			resources
 		})
 	}
 
-	pub fn read(bytes: &[u8], title: &str) -> Result<Dbpf, Box<dyn Error>> {
-		let (resources, header, is_compressed) = Self::read_resources(bytes)?;
+	pub fn read(bytes: &[u8]) -> Result<Dbpf, Box<dyn Error>> {
+		let (resources, header) = Self::read_resources(bytes)?;
 		let decoded_resources = resources
 			.iter()
-			.map(|r| -> Result<DecodedResource, Box<dyn Error>> { r.decode(title) })
+			.map(|r| -> Result<DecodedResource, Box<dyn Error>> { r.decode() })
 			.collect::<Result<Vec<DecodedResource>, Box<dyn Error>>>()?;
 
 		Ok(Dbpf {
 			header,
-			resources: decoded_resources,
-			is_compressed
+			resources: decoded_resources
 		})
 	}
 
-	pub fn read_resources(bytes: &[u8]) -> Result<(Vec<Resource>, Header, bool), Box<dyn Error>> {
+	pub fn read_resources(bytes: &[u8]) -> Result<(Vec<Resource>, Header), Box<dyn Error>> {
 		let mut cur = Cursor::new(bytes);
 		let header = Header::read(&mut cur)?;
 		cur.set_position(header.index_offset as u64);
-		let (index_entries, is_compressed) = IndexEntry::read_all(&mut cur, &header)?;
+		let index_entries = IndexEntry::read_all(&mut cur, &header)?;
 		let resources = Resource::read_all(&mut cur, &index_entries)?;
-		Ok((resources, header, is_compressed))
+		Ok((resources, header))
 	}
 
-	pub fn read_from_file(path: &Path, title: &str) -> Result<Dbpf, Box<dyn Error>> {
+	pub fn read_resources_from_file(path: &Path) -> Result<Vec<Resource>, Box<dyn Error>> {
 		let bytes = fs::read(path)?;
-		Dbpf::read(&bytes, title)
+		let (resources, _) = Dbpf::read_resources(&bytes)?;
+		Ok(resources)
 	}
 
-	pub fn write(&self, writer: &mut Cursor<Vec<u8>>, compress: Option<bool>) -> Result<(), Box<dyn Error>> {
+	pub fn read_from_file(path: &Path) -> Result<Dbpf, Box<dyn Error>> {
+		let bytes = fs::read(path)?;
+		Dbpf::read(&bytes)
+	}
+
+	pub fn write(&self, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
 		let resources = self.resources
 			.iter()
 			.map(|r| -> Result<Resource, Box<dyn Error>> { r.to_resource() })
 			.collect::<Result<Vec<Resource>, Box<dyn Error>>>()?;
 
-		let compress = compress.is_some_and(|c| c) || self.is_compressed;
-		Self::write_resources(resources, self.header.clone(), writer, compress)
+		Self::write_resources(resources, &self.header, writer)
 	}
 
-	pub fn write_resources(mut resources: Vec<Resource>, mut header: Header, writer: &mut Cursor<Vec<u8>>, compress: bool) -> Result<(), Box<dyn Error>> {
-		if compress {
-			let mut dir_items = Vec::new();
-			for resource in resources.iter_mut() {
-				let uncompressed_size = resource.data.len() as u32;
-				if resource.compress()? {
-					dir_items.push(DirItem{ id: resource.id.clone(), uncompressed_size })
-				}
-			}
-			if !dir_items.is_empty() {
-				let dir = Dir::new(dir_items);
-				resources.insert(0, Resource{ id: dir.id.clone(), data: dir.to_bytes()? });
-			}
-		}
-
+	pub fn write_resources(resources: Vec<Resource>, header: &Header, writer: &mut Cursor<Vec<u8>>) -> Result<(), Box<dyn Error>> {
+		let mut header = header.clone();
 		header.index_entry_count = resources.len() as u32;
 
 		let mut index_entries = Vec::new();
 		let mut offset = if header.minor_version >= 1 { 96 } else { 92 };
 		for resource in &resources {
-			let index_entry = IndexEntry::from_resource(resource, offset);
+			let index_entry = IndexEntry {
+				id: resource.id.clone(),
+				resource_offset: offset,
+				resource_size: resource.data.len() as u32
+			};
+			offset += index_entry.resource_size;
 			index_entries.push(index_entry);
-			offset += resource.data.len() as u32;
 		}
 
 		header.index_offset = offset;
@@ -114,28 +106,21 @@ impl Dbpf {
 		Ok(())
 	}
 
-	pub fn clean_up_resources(&mut self) {
-		self.resources.sort_by_key(|res| res.get_id().to_string());
-		self.resources.dedup_by_key(|res| res.get_id().to_string());
-	}
-
 	pub fn write_to_file(&self, path: &Path) -> Result<(), Box<dyn Error>> {
 		let mut cur = Cursor::new(Vec::new());
-		self.write(&mut cur, None)?;
+		self.write(&mut cur)?;
 		let mut new_file = File::create(path)?;
 		new_file.write_all(&cur.into_inner())?;
 		Ok(())
 	}
 
-	pub fn write_package_file(resources: &[DecodedResource], path: &Path, compress: bool) -> Result<(), Box<dyn Error>> {
-		let mut new_dbpf = Dbpf::new(resources.to_vec())?;
-		new_dbpf.clean_up_resources();
-		new_dbpf.is_compressed = compress;
+	pub fn write_package_file(resources: &[DecodedResource], path: &Path) -> Result<(), Box<dyn Error>> {
+		let new_dbpf = Dbpf::new(resources.to_vec())?;
 		new_dbpf.write_to_file(path)
 	}
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
 pub enum TypeId {
 	#[default]
 	Unknown,
@@ -147,11 +132,13 @@ pub enum TypeId {
 	Mmat,
 	Txmt,
 	Txtr,
+	Lifo,
 	Gzps,
 	Idr,
 	Binx,
 	Xtol,
-	Xhtn,
+	Objd,
+	Ctss,
 	Ui,
 	Coll,
 	TextList,
@@ -174,11 +161,13 @@ impl From<TypeId> for u32 {
 			TypeId::Mmat => 0x4C697E5A,
 			TypeId::Txmt => 0x49596978,
 			TypeId::Txtr => 0x1C4A276C,
+			TypeId::Lifo => 0xED534136,
 			TypeId::Gzps => 0xEBCF3E27,
 			TypeId::Idr => 0xAC506764,
 			TypeId::Binx => 0x0C560F39,
 			TypeId::Xtol => 0x2C1FD8A1,
-			TypeId::Xhtn => 0x8C1580B5,
+			TypeId::Objd => 0x4F424A44,
+			TypeId::Ctss => 0x43545353,
 			TypeId::Ui => 0x00000000,
 			TypeId::Coll => 0x6C4F359D,
 			TypeId::TextList => 0x53545223,
@@ -203,11 +192,13 @@ impl From<u32> for TypeId {
 			0x4C697E5A => Self::Mmat,
 			0x49596978 => Self::Txmt,
 			0x1C4A276C => Self::Txtr,
+			0xED534136 => Self::Lifo,
 			0xEBCF3E27 => Self::Gzps,
 			0xAC506764 => Self::Idr,
 			0x0C560F39 => Self::Binx,
 			0x2C1FD8A1 => Self::Xtol,
-			0x8C1580B5 => Self::Xhtn,
+			0x4F424A44 => Self::Objd,
+			0x43545353 => Self::Ctss,
 			0x00000000 => Self::Ui,
 			0x6C4F359D => Self::Coll,
 			0x53545223 => Self::TextList,
@@ -232,11 +223,13 @@ impl fmt::Display for TypeId {
 			Self::Mmat => write!(f, "MMAT"),
 			Self::Txmt => write!(f, "TXMT"),
 			Self::Txtr => write!(f, "TXTR"),
+			Self::Lifo => write!(f, "LIFO"),
 			Self::Gzps => write!(f, "GZPS"),
 			Self::Idr => write!(f, "3IDR"),
 			Self::Binx => write!(f, "BINX"),
 			Self::Xtol => write!(f, "XTOL"),
-			Self::Xhtn => write!(f, "XHTN"),
+			Self::Objd => write!(f, "OBJD"),
+			Self::Ctss => write!(f, "CTSS"),
 			Self::Ui => write!(f, "UI"),
 			Self::Coll => write!(f, "COLL"),
 			Self::TextList => write!(f, "STR#"),
@@ -249,7 +242,7 @@ impl fmt::Display for TypeId {
 	}
 }
 
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq, Hash)]
 pub struct Identifier {
 	pub type_id: TypeId,
 	pub group_id: u32,
@@ -283,6 +276,20 @@ impl Identifier {
 			self.resource_id.write_le(writer)?;
 		}
 		Ok(())
+	}
+
+	pub fn sort_key(&self) -> String {
+		format!("{:08X}-{:08X}-{:08X}-{:08X}", self.group_id, self.resource_id, self.instance_id, u32::from(self.type_id))
+	}
+
+	pub fn with_type_id(&self, type_id: TypeId) -> Self {
+		let mut new_id = self.clone();
+		new_id.type_id = type_id;
+		new_id
+	}
+
+	pub fn corresponding_resource(&self, resources: &[DecodedResource]) -> Option<DecodedResource> {
+		resources.iter().find(|res| res.get_id() == *self).cloned()
 	}
 }
 
@@ -357,11 +364,11 @@ impl SevenBitString {
 	}
 
 	pub fn replace(&self, old: &str, new: &str) -> Self {
-		Self::new(&self.to_string().replace(&old, &new))
+		Self::new(&self.to_string().replace(old, new))
 	}
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PascalString(Vec<u8>);
 
 impl fmt::Display for PascalString {
@@ -391,5 +398,9 @@ impl PascalString {
 			string_length.write_le(writer)?;
 			writer.write_all(&self.0)?;
 			Ok(())
+	}
+
+	pub fn replace(&self, old: &str, new: &str) -> Self {
+		Self::new(&self.to_string().replace(old, new))
 	}
 }
