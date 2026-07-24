@@ -139,8 +139,7 @@ pub fn recolor_object(file: PathBuf, output: Option<PathBuf>, name: Option<Strin
 				}
 			};
 			if !states.is_empty() {
-				let object_name = mmat.name
-					.to_string()
+				let object_name = dehash_name(&mmat.name.to_string())
 					.split_once('_')
 					.map(|(s, _)| s.to_string())
 					.unwrap_or(mmat.name.to_string());
@@ -195,8 +194,7 @@ fn make_recolor(name: &Option<String>, default_recolors: &[ObjectRecolor], first
 		let family = new_family(&mut rng);
 		for recolor_state in &default_recolor.states {
 			let base_name = format!("{}_{}_{}{}", default_recolor.name, recolor_state.subset_name, recolor_name, recolor_state.state_name);
-			let mmat_name = PascalString::new(&format!("##0x{:08x}!{}", group_id, base_name));
-			let txmt_name = format!("{base_name}_txmt");
+			let base_name_with_group = format!("##0x{:08x}!{}", group_id, base_name);
 
 			if let Some(default_mmat) = &recolor_state.mmat {
 				let mut mmat = default_mmat.clone();
@@ -204,7 +202,7 @@ fn make_recolor(name: &Option<String>, default_recolors: &[ObjectRecolor], first
 				mmat.id.resource_id = 0x00000000;
 				mmat.id.instance_id = mmat_instance;
 				mmat_instance += 1;
-				mmat.name = mmat_name;
+				mmat.name = PascalString::new(&base_name_with_group);
 				mmat.family = family.clone();
 				mmat.default_material = false;
 				resources.push(DecodedResource::Mmat(mmat));
@@ -213,10 +211,10 @@ fn make_recolor(name: &Option<String>, default_recolors: &[ObjectRecolor], first
 			if let Some(default_txmt) = &recolor_state.txmt {
 				let mut txmt = default_txmt.clone();
 				txmt.id.group_id = group_id;
-				txmt.id.resource_id = hash_crc32(&txmt_name);
-				txmt.id.instance_id = hash_crc24(&txmt_name);
-				txmt.block.material_definition = SevenBitString::new(&txmt_name);
-				txmt.block.material_description = SevenBitString::new(&base_name);
+				txmt.id.resource_id = hash_crc32(&format!("{}_txmt", base_name));
+				txmt.id.instance_id = hash_crc24(&format!("{}_txmt", base_name));
+				txmt.block.material_definition = SevenBitString::new(&format!("{}_txmt", base_name_with_group));
+				txmt.block.material_description = SevenBitString::new(&base_name_with_group);
 				if let Some(txtr_ref) = txmt.block.properties.iter_mut()
 					.find(|p| p.name.to_string() == "stdMatBaseTextureName") {
 						txtr_ref.value = SevenBitString::new(&format!("##0x{:08x}!{}", group_id, base_name));
@@ -225,7 +223,7 @@ fn make_recolor(name: &Option<String>, default_recolors: &[ObjectRecolor], first
 			}
 
 			if let Some(default_txtr) = &recolor_state.txtr {
-				let txtr = Txtr::create_empty(group_id, &base_name, default_txtr.block.width, default_txtr.block.height, TxtrPurpose::Object);
+				let txtr = Txtr::create_empty(group_id, &base_name_with_group, default_txtr.block.width, default_txtr.block.height, TxtrPurpose::Object);
 				resources.push(DecodedResource::Txtr(txtr));
 			}
 		}

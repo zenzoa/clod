@@ -233,7 +233,7 @@ impl Gzps {
 	}
 
 	pub fn outfit_name(&self) -> String {
-		format!("{}_{:08X}-{:08X}-{:08X}", self.name, self.id.group_id, self.id.resource_id, self.id.instance_id)
+		format!("{}_{:08x}-{:08x}-{:08x}", self.name, self.id.group_id, self.id.resource_id, self.id.instance_id)
 	}
 
 	pub fn outfit_group_name(&self) -> String {

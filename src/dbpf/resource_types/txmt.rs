@@ -8,6 +8,7 @@ use crate::dbpf::{ Identifier, TypeId, SevenBitString, PascalString };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
 use crate::dbpf::resource_types::nodes::sg_resource::SGResource;
+use crate::helpers::dehash_name;
 
 #[derive(Clone)]
 pub struct Txmt {
@@ -107,7 +108,7 @@ impl Txmt {
 			}
 		}
 		self.txtr_names = self.block.get_txtr_names();
-		let txmt_name = self.block.material_definition.to_string();
+		let txmt_name = dehash_name(&self.block.material_definition.to_string());
 		self.id.resource_id = hash_crc32(&txmt_name);
 		self.id.instance_id = hash_crc24(&txmt_name);
 	}

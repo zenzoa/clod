@@ -72,7 +72,7 @@ pub fn extract_hairs(input: Option<PathBuf>, output: Option<PathBuf>, bins: Opti
 	print!("Saving resources as new packages...");
 	for (group_name, hairs) in hair_groups.iter() {
 		for hair in hairs {
-			let hair_name = format!("{}_{:08X}", hair.gzps.name, hair.gzps.id.instance_id);
+			let hair_name = format!("{}_{:08x}", hair.gzps.name, hair.gzps.id.instance_id);
 
 			let actual_group_name = if group_name.starts_with("fhair_hatmascotknight") && hair.gzps.genders.contains(&Gender::Male) {
 				group_name.replace("fhair", "mhair")

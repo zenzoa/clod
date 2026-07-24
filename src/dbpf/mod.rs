@@ -279,7 +279,7 @@ impl Identifier {
 	}
 
 	pub fn sort_key(&self) -> String {
-		format!("{:08X}-{:08X}-{:08X}-{:08X}", self.group_id, self.resource_id, self.instance_id, u32::from(self.type_id))
+		format!("{:08x}-{:08x}-{:08x}-{:08x}", self.group_id, self.resource_id, self.instance_id, u32::from(self.type_id))
 	}
 
 	pub fn with_type_id(&self, type_id: TypeId) -> Self {
@@ -295,7 +295,7 @@ impl Identifier {
 
 impl fmt::Display for Identifier {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{} {:08X}-{:08X}-{:08X}", self.type_id,  self.group_id, self.resource_id, self.instance_id)
+		write!(f, "{} {:08x}-{:08x}-{:08x}", self.type_id,  self.group_id, self.resource_id, self.instance_id)
 	}
 }
 

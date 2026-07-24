@@ -8,6 +8,7 @@ use crate::dbpf::{ Identifier, TypeId, SevenBitString, PascalString };
 use crate::dbpf::resource::Resource;
 use crate::dbpf::resource_types::rcol::{ Rcol, RcolBlock };
 use crate::dbpf::resource_types::nodes::sg_resource::SGResource;
+use crate::helpers::dehash_name;
 
 #[derive(Clone)]
 pub struct Txtr {
@@ -43,8 +44,8 @@ impl Txtr {
 
 	pub fn create_empty(guid: u32, title: &str, width: u32, height: u32, purpose: TxtrPurpose) -> Self {
 		let name = format!("{title}_txtr");
-		let resource_id = hash_crc32(&name);
-		let instance_id = hash_crc24(&name);
+		let resource_id = hash_crc32(&dehash_name(&name));
+		let instance_id = hash_crc24(&dehash_name(&name));
 		let id = Identifier::new(u32::from(TypeId::Txtr), guid, resource_id, instance_id);
 		let block = TxtrBlock {
 			version: 9,
@@ -66,8 +67,9 @@ impl Txtr {
 	pub fn rename(&mut self, old_name: &str, new_name: &str) {
 		self.name = self.name.replace(&old_name, &new_name);
 		self.block.file_name = self.block.file_name.replace(&old_name, &new_name);
-		self.id.resource_id = hash_crc32(&self.name.to_string());
-		self.id.instance_id = hash_crc24(&self.name.to_string());
+		let txtr_name = dehash_name(&self.name.to_string());
+		self.id.resource_id = hash_crc32(&txtr_name);
+		self.id.instance_id = hash_crc24(&txtr_name);
 	}
 }
 
